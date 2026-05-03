@@ -24,19 +24,19 @@ Built with **Next.js 14** (App Router, TypeScript), styled with **Tailwind CSS**
 
 ## Tech stack
 
-| Layer | Technology |
-|---|---|
-| Framework | Next.js 14 (App Router) |
-| Language | TypeScript |
-| Styling | Tailwind CSS + shadcn/ui |
-| HTTP client | Axios (centralized instance with interceptors) |
-| Data fetching | TanStack Query (React Query) |
-| Auth | Supabase Auth (Google OAuth) |
-| Forms | React Hook Form + Zod |
-| Calendar UI | FullCalendar / react-big-calendar *(TBD)* |
-| Linting | ESLint + Prettier |
-| Testing | Vitest + React Testing Library |
-| Deployment | Vercel |
+| Layer         | Technology                                     |
+| ------------- | ---------------------------------------------- |
+| Framework     | Next.js 14 (App Router)                        |
+| Language      | TypeScript                                     |
+| Styling       | Tailwind CSS + shadcn/ui                       |
+| HTTP client   | Axios (centralized instance with interceptors) |
+| Data fetching | TanStack Query (React Query)                   |
+| Auth          | Supabase Auth (Google OAuth)                   |
+| Forms         | React Hook Form + Zod                          |
+| Calendar UI   | FullCalendar / react-big-calendar _(TBD)_      |
+| Linting       | ESLint + Prettier                              |
+| Testing       | Vitest + React Testing Library                 |
+| Deployment    | Vercel                                         |
 
 ---
 
@@ -75,12 +75,12 @@ The app will be live at **http://localhost:3000**.
 
 Next.js loads `.env.local` automatically in development. Variables prefixed with `NEXT_PUBLIC_` are exposed to the browser — **never put secrets in these**.
 
-| Variable | Description | Example |
-|---|---|---|
-| `NEXT_PUBLIC_API_URL` | Base URL of the FastAPI backend | `http://localhost:8000` |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | `https://xxx.supabase.co` |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (safe for browser) | `eyJhbGci...` |
-| `NEXT_PUBLIC_APP_URL` | This app's own URL (for OAuth callbacks) | `http://localhost:3000` |
+| Variable                        | Description                              | Example                   |
+| ------------------------------- | ---------------------------------------- | ------------------------- |
+| `NEXT_PUBLIC_API_URL`           | Base URL of the FastAPI backend          | `http://localhost:8000`   |
+| `NEXT_PUBLIC_SUPABASE_URL`      | Supabase project URL                     | `https://xxx.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (safe for browser)     | `eyJhbGci...`             |
+| `NEXT_PUBLIC_APP_URL`           | This app's own URL (for OAuth callbacks) | `http://localhost:3000`   |
 
 > **Never commit `.env.local`** — it's in `.gitignore`.
 
@@ -161,16 +161,18 @@ We use a **single, centralized Axios instance** (`lib/api.ts`) to talk to the ba
 
 ```ts
 // lib/api.ts (excerpt)
-import axios from 'axios';
-import { supabase } from '@/lib/supabase';
+import axios from "axios";
+import { supabase } from "@/lib/supabase";
 
 export const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL,
-  headers: { 'Content-Type': 'application/json' },
+  headers: { "Content-Type": "application/json" },
 });
 
 api.interceptors.request.use(async (config) => {
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (session?.access_token) {
     config.headers.Authorization = `Bearer ${session.access_token}`;
   }
@@ -182,10 +184,10 @@ api.interceptors.response.use(
   async (error) => {
     if (error.response?.status === 401) {
       await supabase.auth.signOut();
-      window.location.href = '/login';
+      window.location.href = "/login";
     }
     return Promise.reject(error);
-  }
+  },
 );
 ```
 
@@ -193,15 +195,15 @@ api.interceptors.response.use(
 
 ```ts
 // hooks/useSchedules.ts
-import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/api';
-import type { Schedule } from '@/types/schedule';
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import type { Schedule } from "@/types/schedule";
 
 export function useSchedules() {
   return useQuery({
-    queryKey: ['schedules'],
+    queryKey: ["schedules"],
     queryFn: async () => {
-      const { data } = await api.get<Schedule[]>('/api/schedule');
+      const { data } = await api.get<Schedule[]>("/api/schedule");
       return data;
     },
   });
@@ -231,7 +233,7 @@ CI runs tests on every PR.
 
 - **Formatting:** Prettier
 - **Linting:** ESLint (Next.js recommended rules)
-- **Pre-commit:** Husky runs lint and type-check before each commit *(to be added)*
+- **Pre-commit:** Husky runs lint and type-check before each commit _(to be added)_
 
 ```bash
 # Format all files
@@ -296,4 +298,4 @@ We use **GitHub Flow**: branch → commit → PR → review → merge.
 
 ---
 
-*CMSC 186 · UP Mindanao · April 2026*
+_CMSC 186 · UP Mindanao · April 2026_
