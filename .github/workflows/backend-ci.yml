@@ -1,0 +1,56 @@
+name: Backend CI
+
+on:
+  pull_request:
+    paths:
+      - "thesync-backend/**"
+      - ".github/workflows/backend-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "thesync-backend/**"
+      - ".github/workflows/backend-ci.yml"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: thesync-backend
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: thesync-backend/.python-version
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --all-groups --frozen
+
+      - name: Run Ruff
+        run: uv run ruff check .
+
+      - name: Run Black
+        run: uv run black --check .
+
+      - name: Run Flake8
+        run: uv run flake8 .
+
+      - name: Run Bandit
+        run: uv run bandit -r . -x './.venv/*,./.git/*,./.github/*'
+
+      - name: Run pre-commit
+        run: uv run pre-commit run --all-files --show-diff-on-failure --config .pre-commit-config.yaml

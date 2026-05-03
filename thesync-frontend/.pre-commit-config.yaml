@@ -1,0 +1,28 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+        files: ^thesync-frontend/
+      - id: end-of-file-fixer
+        files: ^thesync-frontend/
+      - id: trailing-whitespace
+        files: ^thesync-frontend/
+
+  - repo: local
+    hooks:
+      - id: frontend-eslint
+        name: frontend-eslint
+        entry: npm
+        args: [--prefix, thesync-frontend, run, lint]
+        language: system
+        pass_filenames: false
+        files: ^thesync-frontend/
+
+      - id: frontend-prettier
+        name: frontend-prettier
+        entry: npm
+        args: [--prefix, thesync-frontend, run, format:check]
+        language: system
+        pass_filenames: false
+        files: ^thesync-frontend/
