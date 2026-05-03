@@ -13,6 +13,7 @@ dependencies = [
 dev = [
     "bandit>=1.8.6",
     "black>=25.1.0",
+    "commitizen>=4.8.3",
     "flake8>=7.2.0",
     "pre-commit>=4.2.0",
     "ruff>=0.12.0",
@@ -29,3 +30,10 @@ extend-exclude = [".venv"]
 
 [tool.ruff.lint]
 select = ["B", "E", "F", "I", "UP"]
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.1.0"
+tag_format = "backend-v$version"
+update_changelog_on_bump = false
+version_files = ["pyproject.toml:version"]
