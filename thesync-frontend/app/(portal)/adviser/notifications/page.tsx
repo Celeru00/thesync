@@ -67,7 +67,8 @@ const notifications = [
   },
   {
     title: "Defense Scheduled",
-    description: "Your thesis defense has been scheduled for May 15, 2026 at 1:00 PM",
+    description:
+      "Your thesis defense has been scheduled for May 15, 2026 at 1:00 PM",
     time: "2 days ago",
     icon: CheckCircle2,
     iconClassName: "bg-success-soft text-success",
@@ -108,7 +109,9 @@ export default function AdviserNotificationsPage() {
             <Card key={stat.label} className="rounded-xl py-6 shadow-elevated">
               <CardContent className="flex items-center justify-between gap-4 px-6">
                 <div>
-                  <p className="text-body-sm text-content-muted">{stat.label}</p>
+                  <p className="text-body-sm text-content-muted">
+                    {stat.label}
+                  </p>
                   <p className="mt-1 text-3xl font-semibold text-content-strong">
                     {stat.value}
                   </p>

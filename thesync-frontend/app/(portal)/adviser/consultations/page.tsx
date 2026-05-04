@@ -149,8 +149,16 @@ export default function AdviserConsultationsPage() {
                   label="Date"
                   value={request.date}
                 />
-                <RequestDetail icon={Clock3} label="Time" value={request.time} />
-                <RequestDetail icon={FileText} label="Type" value={request.type} />
+                <RequestDetail
+                  icon={Clock3}
+                  label="Time"
+                  value={request.time}
+                />
+                <RequestDetail
+                  icon={FileText}
+                  label="Type"
+                  value={request.type}
+                />
               </div>
 
               {request.actions ? (
@@ -170,7 +178,11 @@ export default function AdviserConsultationsPage() {
                     <X data-icon="inline-start" className="size-4" />
                     Reject
                   </Button>
-                  <Button type="button" variant="outline" className="rounded-lg">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-lg"
+                  >
                     <RefreshCw data-icon="inline-start" className="size-4" />
                     Reschedule
                   </Button>
