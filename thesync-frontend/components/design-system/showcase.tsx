@@ -12,6 +12,7 @@ import {
   FileText,
   Filter,
   Info,
+  LayoutDashboard,
   Mail,
   MapPin,
   Phone,
@@ -47,6 +48,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Sidebar, type SidebarItem } from "@/components/ui/sidebar";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -351,6 +353,20 @@ const breakpoints = [
     note: "Wide desktop dashboards.",
   },
 ];
+
+const sidebarItems: SidebarItem[] = [
+  { href: "#dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "#calendar", label: "Calendar", icon: CalendarDays },
+  { href: "#consultations", label: "Consultations", icon: FileText },
+  { href: "#notifications", label: "Notifications", icon: Bell },
+  { href: "#settings", label: "Settings", icon: Settings2 },
+];
+
+const sidebarUser = {
+  name: "John Doe",
+  email: "john.doe@upm.edu",
+  initials: "JD",
+};
 
 const guidelineGroups = [
   {
@@ -1002,6 +1018,72 @@ export function DesignSystemShowcase() {
                 {iconTiles.map((tile) => (
                   <IconCard key={tile.label} tile={tile} />
                 ))}
+              </div>
+            </div>
+
+            <div>
+              <SectionLabel>Sidebar Pattern</SectionLabel>
+              <div className="mt-4 grid gap-6 xl:grid-cols-[280px_1fr]">
+                <div className="overflow-hidden rounded-[2rem] border border-surface shadow-elevated">
+                  <Sidebar
+                    brandName="ThesisSync"
+                    brandSubtitle="Student Portal"
+                    brandHref="#brand"
+                    items={sidebarItems}
+                    activeHref="#consultations"
+                    user={sidebarUser}
+                    logoutHref="#guidelines"
+                    className="min-h-[760px] w-full border-r-0"
+                  />
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Reusable App Sidebar</CardTitle>
+                    <CardDescription>
+                      A dedicated shell component for student dashboards,
+                      consultation lists, and scheduling screens.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-5">
+                    <p className="text-body">
+                      The component uses the same brand blue, pill navigation,
+                      muted metadata, and spacing rhythm defined across the
+                      design system while keeping the darker left rail shown in
+                      the provided mock.
+                    </p>
+
+                    <div className="flex flex-wrap gap-2">
+                      <CodeToken>components/ui/sidebar.tsx</CodeToken>
+                      <CodeToken>bg-sidebar</CodeToken>
+                      <CodeToken>text-sidebar-foreground</CodeToken>
+                      <CodeToken>bg-sidebar-primary</CodeToken>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <UsageItem
+                        title="Navigation"
+                        description="Typed items accept a label, href, and icon, with the active route highlighted in brand blue."
+                        indicatorClassName="bg-brand"
+                      />
+                      <UsageItem
+                        title="Footer"
+                        description="Profile details and logout stay anchored at the bottom for portal-style layouts."
+                        indicatorClassName="bg-primary-light"
+                      />
+                      <UsageItem
+                        title="Theme"
+                        description="Sidebar-specific CSS variables keep the component visually distinct without breaking the shared token system."
+                        indicatorClassName="bg-violet"
+                      />
+                      <UsageItem
+                        title="Usage"
+                        description="Drop it into a layout and override `activeHref` from the current route or page context."
+                        indicatorClassName="bg-info"
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             </div>
 
