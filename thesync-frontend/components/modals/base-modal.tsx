@@ -42,15 +42,10 @@ export function BaseModal({
 }: BaseModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className={cn(sizeMap[size])}
-        showClose={showClose}
-      >
+      <DialogContent className={cn(sizeMap[size])} showClose={showClose}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          {description && (
-            <DialogDescription>{description}</DialogDescription>
-          )}
+          {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
 
         {children && <DialogBody>{children}</DialogBody>}

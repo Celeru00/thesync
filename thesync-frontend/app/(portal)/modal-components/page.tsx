@@ -13,7 +13,13 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { BaseModal } from "@/components/modals/base-modal";
 import { ConfirmationModal } from "@/components/modals/confirmation-modal";
 import { ConsultationFormModal } from "@/components/modals/consultation-form-modal";
@@ -30,8 +36,18 @@ const SAMPLE_SESSION: ScheduleDetail = {
   startTime: "2:00 PM",
   endTime: "3:00 PM",
   participants: [
-    { id: "a", name: "Dr. Proceso L. Fernandez", role: "Adviser", email: "pfernandez@up.edu.ph" },
-    { id: "b", name: "Gabby Bautista", role: "Student", email: "grbautista1@up.edu.ph" },
+    {
+      id: "a",
+      name: "Dr. Proceso L. Fernandez",
+      role: "Adviser",
+      email: "pfernandez@up.edu.ph",
+    },
+    {
+      id: "b",
+      name: "Gabby Bautista",
+      role: "Student",
+      email: "grbautista1@up.edu.ph",
+    },
   ],
   topic: "Introduction and Background",
   description:
@@ -77,12 +93,14 @@ export default function ModalComponentsPage() {
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <p className="text-label">Information Modals</p>
-            {["Schedule Details Modal", "Basic Dialog", "Info Dialog"].map((item) => (
-              <div key={item} className="flex items-center gap-2">
-                <div className="size-1.5 rounded-full bg-brand" />
-                <p className="text-body-sm">{item}</p>
-              </div>
-            ))}
+            {["Schedule Details Modal", "Basic Dialog", "Info Dialog"].map(
+              (item) => (
+                <div key={item} className="flex items-center gap-2">
+                  <div className="size-1.5 rounded-full bg-brand" />
+                  <p className="text-body-sm">{item}</p>
+                </div>
+              ),
+            )}
           </div>
           <div className="space-y-2">
             <p className="text-label">Action Modals</p>
@@ -202,7 +220,10 @@ export default function ModalComponentsPage() {
           "Keyboard accessible (Escape key blocked)",
         ]}
       >
-        <Button variant="destructive" onClick={() => toggle("destructive", true)}>
+        <Button
+          variant="destructive"
+          onClick={() => toggle("destructive", true)}
+        >
           <Trash2 className="size-4" />
           Delete Item
         </Button>
@@ -257,7 +278,9 @@ export default function ModalComponentsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Implementation Reference</CardTitle>
-          <CardDescription>How to use these modals in your code</CardDescription>
+          <CardDescription>
+            How to use these modals in your code
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
