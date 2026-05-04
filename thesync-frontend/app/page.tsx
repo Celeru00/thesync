@@ -1,113 +1,112 @@
 import Link from "next/link";
-import { ArrowRight, Layers3, LogIn, UserRoundPlus } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-
-const landingCards = [
-  {
-    title: "Student portal shell",
-    description:
-      "Shared sidebar layout is now applied to the student routes and ready for real feature screens.",
-  },
-  {
-    title: "Auth routes",
-    description:
-      "Login and registration placeholders stay outside the app shell for cleaner onboarding flows.",
-  },
-  {
-    title: "Design system",
-    description:
-      "The existing design system showcase is preserved on its own route for reference during implementation.",
-  },
-];
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-linear-to-b from-primary-tint via-background to-background">
-      <div className="mx-auto flex max-w-7xl flex-col gap-10 px-6 py-12 lg:px-8 lg:py-16">
-        <div className="grid gap-10 xl:grid-cols-[1.2fr_0.8fr]">
-          <div className="space-y-6">
-            <Badge variant="secondary">Landing Placeholder</Badge>
-            <div className="space-y-4">
-              <h1 className="max-w-3xl text-heading">
-                ThesisSync now has a shared sidebar shell for portal pages, with
-                landing and auth kept outside that layout.
-              </h1>
-              <p className="max-w-2xl text-body">
-                This page is a temporary landing screen while the rest of the
-                product is being built out. Use the links below to move between
-                the student portal, auth routes, and design system reference.
+    <main className="relative min-h-screen overflow-hidden bg-page text-page">
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-linear-to-b from-primary-tint/55 via-background to-background"
+      />
+      <div
+        aria-hidden
+        className="absolute left-1/2 top-[42%] size-[42rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-linear-to-br from-primary-tint via-white to-background opacity-90 blur-3xl"
+      />
+
+      <div className="relative flex min-h-screen flex-col">
+        <header className="border-b border-surface bg-surface-frosted backdrop-blur-sm">
+          <div className="flex w-full items-center justify-between px-8 py-[1.1rem] lg:px-9">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-3.5 rounded-2xl outline-none transition-opacity hover:opacity-90 focus-visible:ring-4 focus-visible:ring-focus"
+            >
+              <LogoMark className="size-[3.1rem] rounded-[1rem] [&_svg]:size-[1.35rem]" />
+              <BrandWordmark className="text-[2rem] leading-none" />
+            </Link>
+
+            <Button asChild size="sm" className="rounded-[0.9rem] px-4">
+              <Link href="/login">Login</Link>
+            </Button>
+          </div>
+        </header>
+
+        <section className="flex flex-1 items-center justify-center px-6 py-14 sm:py-16">
+          <div className="flex w-full max-w-[42rem] flex-col items-center pb-2 text-center">
+            <LogoMark className="mb-5 size-[3.75rem] rounded-[1.15rem] [&_svg]:size-[1.7rem]" />
+
+            <h1 className="text-[2.75rem] leading-[1.02] font-semibold tracking-[-0.045em] text-content-strong sm:text-[3.35rem]">
+              <BrandWordmark />
+            </h1>
+
+            <p className="mt-4 max-w-[31rem] text-[1.05rem] leading-[1.65] font-normal text-content-muted sm:max-w-[35rem] sm:text-[1.1rem]">
+              A centralized scheduling system for thesis consultations and
+              defense coordination
+            </p>
+
+            <div className="mt-8 flex w-full max-w-[28.125rem] flex-col items-center">
+              <Button
+                asChild
+                size="lg"
+                className="h-[3rem] w-full rounded-[1rem] text-[1.05rem] shadow-elevated"
+              >
+                <Link href="/login">
+                  <span
+                    data-icon="inline-start"
+                    className="inline-flex items-center justify-center text-[1.4rem] leading-none font-semibold text-brand-on"
+                  >
+                    G
+                  </span>
+                  Sign in with UP Email
+                </Link>
+              </Button>
+
+              <p className="mt-3 text-[0.95rem] leading-6 text-content-muted">
+                Requires @up.edu.ph email address
               </p>
             </div>
-            <div className="flex flex-wrap gap-3">
-              <Button asChild>
-                <Link href="/student">
-                  Open Student Portal
-                  <ArrowRight />
-                </Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link href="/login">
-                  <LogIn />
-                  Login
-                </Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link href="/register">
-                  <UserRoundPlus />
-                  Register
-                </Link>
-              </Button>
-              <Button asChild variant="ghost">
-                <Link href="/design-system">
-                  <Layers3 />
-                  Design System
-                </Link>
-              </Button>
+          </div>
+        </section>
+
+        <footer className="border-t border-surface bg-surface-frosted backdrop-blur-sm">
+          <div className="flex w-full flex-col gap-4 px-8 py-7 sm:flex-row sm:items-end sm:justify-between lg:px-9">
+            <div className="flex items-center gap-3">
+              <LogoMark className="size-[2.5rem] rounded-[0.95rem] [&_svg]:size-[1.05rem]" />
+              <BrandWordmark className="text-[1.65rem] leading-none" />
+            </div>
+
+            <div className="space-y-1 text-left sm:text-right">
+              <p className="text-[1.05rem] leading-7 font-medium text-content">
+                CMSC 186 Project - DMPCS, UP Mindanao
+              </p>
+              <p className="text-[0.9rem] leading-6 text-content-muted">
+                &copy; 2026 ThesisSync. Built for UP Mindanao academic
+                community.
+              </p>
             </div>
           </div>
-
-          <Card className="border-brand-subtle bg-surface-frosted backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle>Current route map</CardTitle>
-              <CardDescription>
-                Initial placeholders created for the main application sections.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-body-sm">
-              <div>`/` landing placeholder</div>
-              <div>`/login` and `/register` auth placeholders</div>
-              <div>`/student` dashboard placeholder</div>
-              <div>`/student/calendar` calendar placeholder</div>
-              <div>`/student/consultations` consultations placeholder</div>
-              <div>`/student/notifications` notifications placeholder</div>
-              <div>`/student/settings` settings placeholder</div>
-              <div>`/design-system` design reference</div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          {landingCards.map((card) => (
-            <Card key={card.title}>
-              <CardHeader>
-                <CardTitle>{card.title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-body-sm">{card.description}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        </footer>
       </div>
     </main>
+  );
+}
+
+function LogoMark({ className }: { className?: string }) {
+  return (
+    <div
+      className={`flex size-12 items-center justify-center rounded-2xl bg-brand text-brand-on shadow-glow ${className ?? ""}`}
+    >
+      <CalendarDays className="size-6" />
+    </div>
+  );
+}
+
+function BrandWordmark({ className }: { className?: string }) {
+  return (
+    <span className={`font-semibold tracking-[-0.045em] ${className ?? ""}`}>
+      <span className="text-content-strong">Thesis</span>
+      <span className="text-brand">Sync</span>
+    </span>
   );
 }
