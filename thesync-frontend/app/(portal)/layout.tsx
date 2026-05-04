@@ -12,7 +12,7 @@ export default function PortalLayout({
       <div className="flex min-h-screen flex-col md:flex-row">
         <PortalSidebar />
         <main className="min-w-0 flex-1">
-          <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 py-8 lg:px-10 lg:py-10">
+          <div className="flex min-h-screen w-full flex-col px-6 py-8 lg:px-10 lg:py-10 2xl:px-12">
             {children}
           </div>
         </main>
