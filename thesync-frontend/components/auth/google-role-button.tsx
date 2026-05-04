@@ -7,8 +7,12 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 
 const toneClassNames = {
-  student: "bg-[#3568EA] hover:bg-[#2E5ED8]",
-  adviser: "bg-[#447FE2] hover:bg-[#3970CD]",
+  student:
+    "bg-linear-to-r from-[#3568EA] to-[#2D63E8] text-white hover:from-[#2E5ED8] hover:to-[#2757D6]",
+  adviser:
+    "bg-linear-to-r from-[#447FE2] to-[#3970CD] text-white hover:from-[#3C77D8] hover:to-[#3167BE]",
+  admin:
+    "bg-linear-to-r from-[#5D97E5] to-[#4E88D7] text-white hover:from-[#548FE0] hover:to-[#467FCB]",
 } as const;
 
 type GoogleRoleButtonProps = {
@@ -57,7 +61,7 @@ export function GoogleRoleButton({
         size="lg"
         onClick={handleClick}
         disabled={isPending}
-        className={`h-[3rem] w-full rounded-[0.95rem] justify-center gap-3 text-[1.05rem] font-medium shadow-none ${toneClassNames[tone]}`}
+        className={`h-[3rem] w-full rounded-[0.95rem] justify-center gap-3 border-transparent text-[1.05rem] font-medium shadow-none ${toneClassNames[tone]}`}
       >
         {isPending ? (
           <LoaderCircle className="size-5 animate-spin" />

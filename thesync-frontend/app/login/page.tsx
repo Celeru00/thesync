@@ -3,7 +3,6 @@ import { AlertCircle, CalendarDays } from "lucide-react";
 
 import { GoogleRoleButton } from "@/components/auth/google-role-button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 
 type LoginPageProps = {
   searchParams: Promise<{
@@ -86,7 +85,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 nextPath="/adviser"
                 tone="adviser"
               />
-              <RoleButton label="Sign in as Admin" tone="admin" disabled />
+              <GoogleRoleButton
+                label="Sign in as Admin"
+                nextPath="/admin"
+                tone="admin"
+              />
             </div>
 
             <div className="mt-3 h-px w-full bg-surface" />
@@ -113,39 +116,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </div>
       </div>
     </main>
-  );
-}
-
-function RoleButton({
-  label,
-  tone,
-  disabled = false,
-}: {
-  label: string;
-  tone: "student" | "adviser" | "admin";
-  disabled?: boolean;
-}) {
-  const toneClassName = {
-    student: "bg-[#3568EA] hover:bg-[#2E5ED8]",
-    adviser: "bg-[#447FE2] hover:bg-[#3970CD]",
-    admin: "bg-[#5D97E5] hover:bg-[#4D87D8]",
-  }[tone];
-
-  return (
-    <Button
-      type="button"
-      size="lg"
-      disabled={disabled}
-      className={`h-[3rem] w-full rounded-[0.95rem] justify-center gap-3 text-[1.05rem] font-medium shadow-none ${toneClassName}`}
-    >
-      <span
-        aria-hidden
-        className="inline-flex items-center justify-center text-[1.45rem] leading-none font-semibold"
-      >
-        G
-      </span>
-      {label}
-    </Button>
   );
 }
 

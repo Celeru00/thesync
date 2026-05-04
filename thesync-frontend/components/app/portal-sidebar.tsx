@@ -43,7 +43,33 @@ const adviserSidebarItems: SidebarItem[] = [
   { href: "/adviser/settings", label: "Settings", icon: Settings2 },
 ];
 
+const adminSidebarItems: SidebarItem[] = [
+  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/calendar", label: "Calendar", icon: CalendarDays },
+  {
+    href: "/admin/consultations",
+    label: "Consultations",
+    icon: FileText,
+  },
+  {
+    href: "/admin/notifications",
+    label: "Notifications",
+    icon: Bell,
+  },
+  { href: "/admin/settings", label: "Settings", icon: Settings2 },
+];
+
 const portalConfigs = {
+  admin: {
+    brandSubtitle: "Admin Portal",
+    brandHref: "/admin",
+    items: adminSidebarItems,
+    user: {
+      name: "Admin User",
+      email: "admin@up.edu.ph",
+      initials: "AU",
+    },
+  },
   adviser: {
     brandSubtitle: "Adviser Portal",
     brandHref: "/adviser",
@@ -67,6 +93,10 @@ const portalConfigs = {
 } as const;
 
 function getPortalConfig(pathname: string) {
+  if (pathname.startsWith("/admin")) {
+    return portalConfigs.admin;
+  }
+
   if (pathname.startsWith("/adviser")) {
     return portalConfigs.adviser;
   }
