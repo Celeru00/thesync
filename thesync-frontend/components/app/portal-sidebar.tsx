@@ -3,6 +3,7 @@
 import {
   Bell,
   CalendarDays,
+  CalendarRange,
   FileText,
   LayoutDashboard,
   Settings2,
@@ -34,6 +35,11 @@ const adviserSidebarItems: SidebarItem[] = [
     href: "/adviser/consultations",
     label: "Consultations",
     icon: FileText,
+  },
+  {
+    href: "/adviser/availability",
+    label: "Availability",
+    icon: CalendarRange,
   },
   {
     href: "/adviser/notifications",
