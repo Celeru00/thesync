@@ -45,3 +45,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# keep frontend shared helpers tracked even though the repo root ignores `lib/`
+!lib/
+!lib/**/*.ts
+!lib/**/*.tsx
