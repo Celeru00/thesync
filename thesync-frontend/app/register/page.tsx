@@ -1,13 +1,47 @@
-import { AuthPagePlaceholder } from "@/components/app/auth-page-placeholder";
+import { redirect } from "next/navigation";
 
-export default function RegisterPage() {
+import { RegisterFlow } from "@/components/auth/register-flow";
+import {
+  getAppUserWithRole,
+  getAuthPrefill,
+  getDashboardPathForRole,
+  isSignupRole,
+} from "@/lib/auth/profile";
+import { createClient } from "@/lib/supabase/server";
+
+type RegisterPageProps = {
+  searchParams: Promise<{
+    role?: string | string[];
+  }>;
+};
+
+export default async function RegisterPage({
+  searchParams,
+}: RegisterPageProps) {
+  const params = await searchParams;
+  const roleParam = Array.isArray(params.role) ? params.role[0] : params.role;
+  const initialRole = isSignupRole(roleParam) ? roleParam : null;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    const { account, errorCode } = await getAppUserWithRole(supabase, user.id);
+
+    if (errorCode === "role-not-supported") {
+      redirect("/login?error=role-not-supported");
+    }
+
+    if (account) {
+      redirect(getDashboardPathForRole(account.role));
+    }
+  }
+
   return (
-    <AuthPagePlaceholder
-      badge="Authentication"
-      title="Register"
-      description="This placeholder reserves the registration route outside of the shared student sidebar shell. Replace it with your onboarding flow when ready."
-      alternateHref="/login"
-      alternateLabel="Go to login"
+    <RegisterFlow
+      initialRole={initialRole}
+      initialPrefill={getAuthPrefill(user)}
     />
   );
 }

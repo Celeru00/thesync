@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { AlertCircle, CalendarDays } from "lucide-react";
 
 import { GoogleRoleButton } from "@/components/auth/google-role-button";
+import { GoogleSignupLink } from "@/components/auth/google-signup-link";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 type LoginPageProps = {
@@ -17,6 +17,22 @@ function getErrorMessage(error?: string) {
 
   if (error === "missing-code") {
     return "Google sign-in did not complete. Try starting the login flow again.";
+  }
+
+  if (error === "account-lookup-failed") {
+    return "Your account could not be matched against the database. Check the users and roles tables and try again.";
+  }
+
+  if (error === "role-lookup-failed") {
+    return "Your account role could not be resolved. Check the roles table and try again.";
+  }
+
+  if (error === "role-not-supported") {
+    return "This account role is not supported in the current frontend.";
+  }
+
+  if (error === "admin-not-provisioned") {
+    return "Admin accounts must be provisioned first. Sign in with a registered admin account.";
   }
 
   return null;
@@ -77,17 +93,17 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <div className="space-y-3 px-6 pb-3">
               <GoogleRoleButton
                 label="Sign in as Student"
-                nextPath="/student"
+                role="student"
                 tone="student"
               />
               <GoogleRoleButton
                 label="Sign in as Adviser"
-                nextPath="/adviser"
+                role="adviser"
                 tone="adviser"
               />
               <GoogleRoleButton
                 label="Sign in as Admin"
-                nextPath="/admin"
+                role="admin"
                 tone="admin"
               />
             </div>
@@ -95,13 +111,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <div className="mt-3 h-px w-full bg-surface" />
 
             <div className="px-6 py-5 text-center text-[1rem] leading-7 text-content-muted">
-              <span>Don&apos;t have an account? </span>
-              <Link
-                href="/register"
-                className="font-medium text-brand underline-offset-4 transition-colors hover:text-brand-strong hover:underline"
-              >
-                Register here
-              </Link>
+              <GoogleSignupLink />
             </div>
           </div>
         </div>
