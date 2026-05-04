@@ -1,6 +1,6 @@
-# ThesisSync Frontend
+# TheSync Frontend
 
-Web client for ThesisSync — the scheduling platform for thesis consultations and defense coordination.
+Web client for TheSync — the scheduling platform for thesis consultations and defense coordination.
 
 Built with **Next.js 14** (App Router, TypeScript), styled with **Tailwind CSS** and **shadcn/ui**, and communicating with the FastAPI backend via a centralized **Axios** client.
 
@@ -260,7 +260,7 @@ Production is deployed to **Vercel** via GitHub integration.
 - **`main` branch** auto-deploys to production
 - **Every PR** gets a preview deployment with its own URL
 - Environment variables configured in the Vercel dashboard
-- Custom domain (e.g. `thesissync.app`) with automatic HTTPS
+- Custom domain (e.g. `thesync.app`) with automatic HTTPS
 
 See `SETUP_GUIDE.md` in the org for deployment steps.
 

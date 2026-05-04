@@ -81,8 +81,7 @@ export default function HomePage() {
                 CMSC 186 Project - DMPCS, UP Mindanao
               </p>
               <p className="text-[0.9rem] leading-6 text-content-muted">
-                &copy; 2026 ThesisSync. Built for UP Mindanao academic
-                community.
+                &copy; 2026 TheSync. Built for UP Mindanao academic community.
               </p>
             </div>
           </div>
@@ -105,7 +104,7 @@ function LogoMark({ className }: { className?: string }) {
 function BrandWordmark({ className }: { className?: string }) {
   return (
     <span className={`font-semibold tracking-[-0.045em] ${className ?? ""}`}>
-      <span className="text-content-strong">Thesis</span>
+      <span className="text-content-strong">The</span>
       <span className="text-brand">Sync</span>
     </span>
   );

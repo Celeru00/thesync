@@ -32,7 +32,7 @@ export function PortalSidebar() {
 
   return (
     <Sidebar
-      brandName="ThesisSync"
+      brandName="TheSync"
       brandSubtitle="Student Portal"
       brandHref="/student"
       items={portalSidebarItems}
