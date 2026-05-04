@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { LoaderCircle } from "lucide-react";
 
+import type { AppRole } from "@/lib/auth/profile";
+import { startGoogleAuth } from "@/lib/auth/google-oauth";
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/client";
 
 const toneClassNames = {
   student:
@@ -17,15 +18,11 @@ const toneClassNames = {
 
 type GoogleRoleButtonProps = {
   label: string;
-  nextPath: string;
+  role: AppRole;
   tone: keyof typeof toneClassNames;
 };
 
-export function GoogleRoleButton({
-  label,
-  nextPath,
-  tone,
-}: GoogleRoleButtonProps) {
+export function GoogleRoleButton({ label, role, tone }: GoogleRoleButtonProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
 
@@ -33,16 +30,9 @@ export function GoogleRoleButton({
     setErrorMessage(null);
     setIsPending(true);
 
-    const supabase = createClient();
-    const redirectUrl = new URL("/auth/callback", window.location.origin);
-
-    redirectUrl.searchParams.set("next", nextPath);
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: redirectUrl.toString(),
-      },
+    const { error } = await startGoogleAuth({
+      flow: "login",
+      role,
     });
 
     if (error) {
