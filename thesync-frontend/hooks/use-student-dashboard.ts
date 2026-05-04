@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { StudentDashboardData } from "@/types/dashboard";
 
 const MOCK_DATA: StudentDashboardData = {
@@ -74,15 +73,6 @@ export interface UseStudentDashboardResult {
 }
 
 export function useStudentDashboard(): UseStudentDashboardResult {
-  const [data, setData] = useState<StudentDashboardData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-
-  useEffect(() => {
-    // Replace with: studentApi.getDashboard() once the backend is ready
-    setData(MOCK_DATA);
-    setIsLoading(false);
-  }, []);
-
-  return { data, isLoading, error };
+  // Swap this return for a real useState + useEffect + studentApi.getDashboard() call when the backend is ready
+  return { data: MOCK_DATA, isLoading: false, error: null };
 }
