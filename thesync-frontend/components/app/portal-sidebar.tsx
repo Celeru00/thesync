@@ -5,7 +5,9 @@ import {
   CalendarDays,
   CalendarRange,
   FileText,
+  Layers,
   LayoutDashboard,
+  Palette,
   Settings2,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -27,6 +29,8 @@ const studentSidebarItems: SidebarItem[] = [
     icon: Bell,
   },
   { href: "/student/settings", label: "Settings", icon: Settings2 },
+  { href: "/design-system", label: "Design System", icon: Palette },
+  { href: "/modal-components", label: "Modal Components", icon: Layers },
 ];
 
 const adviserSidebarItems: SidebarItem[] = [
@@ -126,7 +130,7 @@ export function PortalSidebar() {
       activeHref={pathname}
       user={config.user}
       logoutHref="/login"
-      className="min-h-fit w-full md:sticky md:top-0 md:h-screen md:w-[17rem] md:shrink-0 md:self-start md:overflow-y-auto"
+      className="min-h-fit w-full md:sticky md:top-0 md:h-screen md:w-68 md:shrink-0 md:self-start md:overflow-y-auto"
     />
   );
 }
