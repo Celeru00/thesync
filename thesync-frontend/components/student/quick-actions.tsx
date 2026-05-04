@@ -12,7 +12,7 @@ export function QuickActions() {
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <Button asChild className="w-full justify-start gap-2">
-          <Link href="/student/consultations">
+          <Link href="/student/consultations/request">
             <Calendar className="size-4" />
             Request Consultation
           </Link>
