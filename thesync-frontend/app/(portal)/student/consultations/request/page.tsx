@@ -1,5 +1,5 @@
-import { StudentRequestConsultationForm } from "@/components/consultations/student-request-consultation-form";
+import { RequestConsultation } from "@/components/student/request-consultation";
 
-export default function StudentConsultationRequestPage() {
-  return <StudentRequestConsultationForm />;
+export default function RequestConsultationPage() {
+  return <RequestConsultation />;
 }
