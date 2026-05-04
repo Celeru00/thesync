@@ -117,7 +117,7 @@ export function PortalSidebar() {
       activeHref={pathname}
       user={config.user}
       logoutHref="/login"
-      className="min-h-fit w-full md:min-h-screen md:w-[17rem] md:shrink-0 md:self-stretch"
+      className="min-h-fit w-full md:sticky md:top-0 md:h-screen md:w-[17rem] md:shrink-0 md:self-start md:overflow-y-auto"
     />
   );
 }
