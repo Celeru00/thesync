@@ -5,20 +5,21 @@ import { Slot } from "radix-ui";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-transparent text-sm font-medium whitespace-nowrap shadow-[var(--elevation-soft)] transition-[background-color,color,border-color,box-shadow,transform] outline-none select-none focus-visible:ring-4 focus-visible:ring-ring/15 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-4 aria-invalid:ring-destructive/15 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-transparent text-sm font-medium whitespace-nowrap shadow-soft transition-[background-color,color,border-color,box-shadow,transform] outline-none select-none focus-visible:ring-4 focus-visible:ring-focus disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-error aria-invalid:ring-4 aria-invalid:ring-error [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary-dark",
+        default:
+          "bg-button-primary text-button-primary hover:bg-button-primary-hover",
         outline:
-          "border-border bg-card text-gray-700 hover:border-primary/20 hover:bg-primary-tint hover:text-primary",
+          "border-surface bg-surface-card text-button-outline hover:border-brand-subtle hover:bg-button-outline-hover hover:text-button-outline-hover",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-blue-100 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+          "bg-button-secondary text-button-secondary hover:bg-button-secondary-hover aria-expanded:bg-button-secondary-hover aria-expanded:text-button-secondary",
         ghost:
-          "bg-transparent text-gray-700 shadow-none hover:bg-primary-tint hover:text-primary aria-expanded:bg-primary-tint aria-expanded:text-primary",
+          "bg-transparent text-button-ghost shadow-none hover:bg-button-ghost-hover hover:text-button-ghost-hover aria-expanded:bg-button-ghost-hover aria-expanded:text-button-ghost-hover",
         destructive:
-          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20",
-        link: "rounded-none px-0 text-primary shadow-none hover:text-primary-dark hover:underline",
+          "bg-button-destructive text-button-destructive hover:bg-button-destructive-hover",
+        link: "rounded-none px-0 text-button-link shadow-none hover:text-button-link-hover hover:underline",
       },
       size: {
         default:

@@ -218,52 +218,52 @@ const typeScale: TypeScale[] = [
   {
     name: "Heading 1",
     sample: "Defense scheduling overview",
-    token: "text-[30px] / leading-9 / font-semibold",
+    token: "text-heading",
     usage: "Primary page titles",
-    className: "text-[30px] leading-9 font-semibold text-gray-900",
+    className: "text-heading",
   },
   {
     name: "Heading 2",
     sample: "Upcoming consultations",
-    token: "text-2xl / leading-8 / font-semibold",
+    token: "text-subheading",
     usage: "Section headings",
-    className: "text-2xl leading-8 font-semibold text-gray-900",
+    className: "text-subheading",
   },
   {
     name: "Heading 3",
     sample: "Panel assignment",
-    token: "text-xl / leading-7 / font-semibold",
+    token: "text-section-title",
     usage: "Card titles and group headings",
-    className: "text-xl leading-7 font-semibold text-gray-900",
+    className: "text-section-title",
   },
   {
     name: "Heading 4",
     sample: "Consultation details",
-    token: "text-lg / leading-6 / font-semibold",
+    token: "text-card-title",
     usage: "Compact headings",
-    className: "text-lg leading-6 font-semibold text-gray-900",
+    className: "text-card-title",
   },
   {
     name: "Body Text",
     sample:
       "ThesisSync centralizes scheduling, approvals, and communication for consultations and defenses.",
-    token: "text-base / leading-7 / font-normal",
+    token: "text-body",
     usage: "Paragraphs and dense interface copy",
-    className: "text-base leading-7 font-normal text-gray-700",
+    className: "text-body",
   },
   {
     name: "Small Text",
     sample: "Used for helper text, metadata, and minor UI labels.",
-    token: "text-sm / leading-6 / font-normal",
+    token: "text-body-sm",
     usage: "Secondary information",
-    className: "text-sm leading-6 font-normal text-gray-600",
+    className: "text-body-sm",
   },
   {
     name: "Extra Small Text",
     sample: "Schedule last synced 2 minutes ago",
-    token: "text-xs / leading-5 / font-normal",
+    token: "text-caption",
     usage: "Captions and metadata",
-    className: "text-xs leading-5 font-normal text-gray-600",
+    className: "text-caption",
   },
 ];
 
@@ -397,46 +397,46 @@ const accessibilityCards = [
     description:
       "All text should meet WCAG AA contrast thresholds for body and large display text.",
     icon: CheckCircle2,
-    tone: "text-success bg-success-soft border-success/15",
+    tone: "text-card-success bg-card-success border-card-success",
   },
   {
     title: "Keyboard Navigation",
     description:
       "Interactive controls keep visible focus rings and logical tab order.",
     icon: ArrowRight,
-    tone: "text-primary bg-primary-tint border-primary/15",
+    tone: "text-card-info bg-card-info border-card-info",
   },
   {
     title: "Screen Readers",
     description:
       "Use semantic HTML, associated labels, and explicit descriptions for complex controls.",
     icon: Info,
-    tone: "text-info bg-info-soft border-info/15",
+    tone: "text-alert-info bg-alert-info border-alert-info",
   },
   {
     title: "Responsive Design",
     description:
       "Mobile-first layout rules keep scheduling flows readable at every breakpoint.",
     icon: CalendarDays,
-    tone: "text-violet bg-violet-soft border-violet/15",
+    tone: "text-badge-special bg-badge-special border-badge-special",
   },
 ];
 
 export function DesignSystemShowcase() {
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-border bg-linear-to-b from-primary-tint via-background to-background">
+    <main className="min-h-screen bg-page text-page">
+      <header className="border-b border-surface bg-linear-to-b from-primary-tint via-background to-background">
         <div className="mx-auto max-w-7xl px-6 py-10 lg:px-8 lg:py-12">
           <div className="flex flex-col gap-8">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-3xl space-y-4">
                 <Badge variant="secondary">ThesisSync Design System</Badge>
                 <div className="space-y-3">
-                  <h1 className="font-heading text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl">
+                  <h1 className="text-heading">
                     Shared visual rules for scheduling, consultation, and
                     defense workflows.
                   </h1>
-                  <p className="max-w-2xl text-base leading-7 text-gray-700">
+                  <p className="max-w-2xl text-body">
                     The system is built around Poppins, brand-first blues,
                     restrained surfaces, and consistent shadcn primitives tuned
                     for university operations rather than marketing screens.
@@ -447,16 +447,14 @@ export function DesignSystemShowcase() {
                 {categoryCards.map((card) => (
                   <Card
                     key={card.title}
-                    className="border-primary/10 bg-white/90 backdrop-blur-sm"
+                    className="border-brand-subtle bg-surface-frosted backdrop-blur-sm"
                     size="sm"
                   >
                     <CardHeader className="pb-1">
-                      <CardTitle className="text-sm text-gray-900">
-                        {card.title}
-                      </CardTitle>
+                      <CardTitle className="text-label">{card.title}</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <ul className="space-y-1 text-sm text-gray-600">
+                      <ul className="space-y-1 text-body-sm">
                         {card.items.map((item) => (
                           <li key={item}>{item}</li>
                         ))}
@@ -486,20 +484,16 @@ export function DesignSystemShowcase() {
           description="The visual language emphasizes clarity, reliability, and academic coordination."
         >
           <div className="grid gap-6 xl:grid-cols-[1.3fr_1fr]">
-            <Card className="border-primary/10 shadow-[var(--elevation-elevated)]">
+            <Card className="border-brand-subtle shadow-elevated">
               <CardContent className="px-6 py-6">
                 <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-                  <div className="flex size-16 items-center justify-center rounded-2xl bg-primary text-white shadow-[var(--elevation-glow)]">
+                  <div className="flex size-16 items-center justify-center rounded-2xl bg-brand text-brand-on shadow-glow">
                     <CalendarDays className="size-8" />
                   </div>
                   <div className="space-y-2">
-                    <div className="text-sm font-medium text-primary">
-                      Logo & Name
-                    </div>
-                    <div className="text-3xl font-semibold text-gray-900">
-                      ThesisSync
-                    </div>
-                    <p className="max-w-xl text-base leading-7 text-gray-700">
+                    <div className="text-eyebrow">Logo & Name</div>
+                    <div className="text-subheading">ThesisSync</div>
+                    <p className="max-w-xl text-body">
                       A centralized scheduling system for thesis consultations
                       and defense coordination across the UP Mindanao academic
                       community.
@@ -524,8 +518,8 @@ export function DesignSystemShowcase() {
                   "Program coordinators and administrators handling approvals",
                 ].map((item) => (
                   <div key={item} className="flex items-start gap-3">
-                    <div className="mt-1 size-2 rounded-full bg-primary" />
-                    <p className="text-sm leading-6 text-gray-700">{item}</p>
+                    <div className="mt-1 size-2 rounded-full bg-brand" />
+                    <p className="text-body-sm">{item}</p>
                   </div>
                 ))}
               </CardContent>
@@ -603,10 +597,8 @@ export function DesignSystemShowcase() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="text-3xl font-semibold text-gray-900">
-                  Poppins
-                </div>
-                <p className="text-sm leading-6 text-gray-700">
+                <div className="text-subheading">Poppins</div>
+                <p className="text-body-sm">
                   Supported weights: 300, 400, 500, 600, and 700.
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -635,13 +627,11 @@ export function DesignSystemShowcase() {
                     {index > 0 ? <Separator /> : null}
                     <div className="space-y-2 pt-5 first:pt-0">
                       <div className="flex flex-wrap items-center gap-3">
-                        <span className="text-sm font-medium text-gray-900">
-                          {item.name}
-                        </span>
+                        <span className="text-label">{item.name}</span>
                         <CodeToken>{item.token}</CodeToken>
                       </div>
                       <div className={item.className}>{item.sample}</div>
-                      <p className="text-sm text-gray-600">{item.usage}</p>
+                      <p className="text-body-sm">{item.usage}</p>
                     </div>
                   </div>
                 ))}
@@ -711,22 +701,22 @@ export function DesignSystemShowcase() {
                 <UsageItem
                   title="Primary"
                   description="Save, submit, approve, schedule, and confirm."
-                  indicatorClassName="bg-primary"
+                  indicatorClassName="bg-button-primary"
                 />
                 <UsageItem
                   title="Secondary / Outline"
                   description="Cancel, back, export, and lower-priority navigation."
-                  indicatorClassName="bg-secondary"
+                  indicatorClassName="bg-button-secondary"
                 />
                 <UsageItem
                   title="Ghost"
                   description="Toolbar actions and lightweight list controls."
-                  indicatorClassName="bg-info"
+                  indicatorClassName="bg-button-ghost-hover"
                 />
                 <UsageItem
                   title="Destructive"
                   description="Delete, reject, archive, or revoke actions."
-                  indicatorClassName="bg-destructive"
+                  indicatorClassName="bg-button-destructive"
                 />
               </CardContent>
             </Card>
@@ -796,9 +786,7 @@ export function DesignSystemShowcase() {
                 </FieldBlock>
 
                 <div className="space-y-4">
-                  <div className="text-sm font-medium text-gray-900">
-                    Checkboxes
-                  </div>
+                  <div className="text-label">Checkboxes</div>
                   <div className="space-y-3">
                     <InlineControl
                       control={<Checkbox defaultChecked id="confirm" />}
@@ -816,9 +804,7 @@ export function DesignSystemShowcase() {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="text-sm font-medium text-gray-900">
-                    Switches
-                  </div>
+                  <div className="text-label">Switches</div>
                   <div className="space-y-3">
                     <SwitchRow
                       label="Email Notifications"
@@ -897,7 +883,7 @@ export function DesignSystemShowcase() {
                   Standard container with title, description, and content.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4 text-sm leading-6 text-gray-700">
+              <CardContent className="space-y-4 text-body">
                 <p>
                   Use for grouped scheduling details, panel summaries, and
                   department metadata where content density matters more than
@@ -911,20 +897,20 @@ export function DesignSystemShowcase() {
               </CardContent>
             </Card>
 
-            <Card className="border-transparent shadow-[var(--elevation-elevated)]">
+            <Card className="border-transparent shadow-elevated">
               <CardHeader>
                 <CardTitle>Elevated Card</CardTitle>
                 <CardDescription>
                   Stronger depth for summary panels and key dashboard widgets.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="text-sm leading-6 text-gray-700">
+              <CardContent className="text-body">
                 Prefer this treatment for high-value stats or workflow callouts
                 rather than every repeated item.
               </CardContent>
             </Card>
 
-            <Card className="border-primary/15 bg-primary-tint">
+            <Card className="border-card-info bg-card-info">
               <CardHeader>
                 <CardTitle>Info Card</CardTitle>
                 <CardDescription>
@@ -932,21 +918,21 @@ export function DesignSystemShowcase() {
                   follow-up.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="text-sm leading-6 text-primary-dark">
+              <CardContent className="text-body text-card-info">
                 Information cards help bring visibility to upcoming deadlines or
                 coordination notes without escalating into warning or error
                 styling.
               </CardContent>
             </Card>
 
-            <Card className="border-success/15 bg-success-soft">
+            <Card className="border-card-success bg-card-success">
               <CardHeader>
                 <CardTitle>Success Card</CardTitle>
                 <CardDescription>
                   Positive confirmation after the workflow completes.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="text-sm leading-6 text-gray-700">
+              <CardContent className="text-card-success text-body">
                 Use for confirmed consultation requests, approved panel
                 assignments, and completed defense scheduling.
               </CardContent>
@@ -1034,20 +1020,16 @@ export function DesignSystemShowcase() {
                       className="grid gap-3 md:grid-cols-[80px_1fr]"
                     >
                       <CodeToken>{item.token}</CodeToken>
-                      <div className="flex items-center gap-4 rounded-lg border border-border bg-surface-subtle px-4 py-3">
+                      <div className="flex items-center gap-4 rounded-lg border border-surface bg-surface-muted px-4 py-3">
                         <div
                           className={cn(
-                            "h-3 rounded-full bg-primary",
+                            "h-3 rounded-full bg-brand",
                             item.width,
                           )}
                         />
                         <div className="space-y-0.5">
-                          <div className="text-sm font-medium text-gray-900">
-                            {item.value}
-                          </div>
-                          <div className="text-sm text-gray-600">
-                            {item.note}
-                          </div>
+                          <div className="text-label">{item.value}</div>
+                          <div className="text-body-sm">{item.note}</div>
                         </div>
                       </div>
                     </div>
@@ -1080,18 +1062,12 @@ export function DesignSystemShowcase() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="grid gap-4 sm:grid-cols-3">
-                    <ShadowPreview
-                      label="Small"
-                      className="shadow-[var(--elevation-soft)]"
-                    />
+                    <ShadowPreview label="Small" className="shadow-soft" />
                     <ShadowPreview
                       label="Elevated"
-                      className="shadow-[var(--elevation-elevated)]"
+                      className="shadow-elevated"
                     />
-                    <ShadowPreview
-                      label="Glow"
-                      className="shadow-[var(--elevation-glow)]"
-                    />
+                    <ShadowPreview label="Glow" className="shadow-glow" />
                   </CardContent>
                 </Card>
               </div>
@@ -1110,20 +1086,16 @@ export function DesignSystemShowcase() {
                   {breakpoints.map((item) => (
                     <div
                       key={item.name}
-                      className="rounded-lg border border-border bg-surface-subtle px-4 py-4"
+                      className="rounded-lg border border-surface bg-surface-muted px-4 py-4"
                     >
                       <div className="flex flex-wrap items-center gap-3">
-                        <span className="text-sm font-semibold text-gray-900">
+                        <span className="text-label font-semibold">
                           {item.name}
                         </span>
                         <CodeToken>{item.prefix}</CodeToken>
-                        <span className="text-sm text-gray-600">
-                          {item.range}
-                        </span>
+                        <span className="text-body-sm">{item.range}</span>
                       </div>
-                      <p className="mt-2 text-sm leading-6 text-gray-700">
-                        {item.note}
-                      </p>
+                      <p className="mt-2 text-body-sm">{item.note}</p>
                     </div>
                   ))}
                 </CardContent>
@@ -1175,10 +1147,8 @@ export function DesignSystemShowcase() {
                   <CardContent className="space-y-3">
                     {group.points.map((point) => (
                       <div key={point} className="flex items-start gap-3">
-                        <div className="mt-1 size-2 rounded-full bg-primary" />
-                        <p className="text-sm leading-6 text-gray-700">
-                          {point}
-                        </p>
+                        <div className="mt-1 size-2 rounded-full bg-brand" />
+                        <p className="text-body-sm">{point}</p>
                       </div>
                     ))}
                   </CardContent>
@@ -1200,14 +1170,14 @@ export function DesignSystemShowcase() {
                         item.tone,
                       )}
                     >
-                      <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white/70">
+                      <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-frosted">
                         <Icon className="size-5" />
                       </div>
                       <div className="space-y-1">
-                        <div className="text-sm font-semibold">
+                        <div className="text-label font-semibold">
                           {item.title}
                         </div>
-                        <p className="text-sm leading-6">{item.description}</p>
+                        <p className="text-body-sm">{item.description}</p>
                       </div>
                     </div>
                   );
@@ -1235,14 +1205,12 @@ function SectionShell({
   children: ReactNode;
 }) {
   return (
-    <section id={id} className="border-t border-border py-10 sm:py-12">
+    <section id={id} className="border-t border-surface py-10 sm:py-12">
       <div className="grid gap-8 lg:grid-cols-[280px_1fr] lg:gap-12">
         <div className="space-y-3">
-          <p className="text-sm font-medium text-primary">{eyebrow}</p>
-          <h2 className="font-heading text-2xl font-semibold tracking-tight text-gray-900">
-            {title}
-          </h2>
-          <p className="text-sm leading-6 text-gray-600">{description}</p>
+          <p className="text-eyebrow">{eyebrow}</p>
+          <h2 className="text-subheading">{title}</h2>
+          <p className="text-body-sm">{description}</p>
         </div>
         <div>{children}</div>
       </div>
@@ -1251,16 +1219,12 @@ function SectionShell({
 }
 
 function SectionLabel({ children }: { children: ReactNode }) {
-  return (
-    <div className="text-sm font-medium tracking-[0.02em] text-gray-900">
-      {children}
-    </div>
-  );
+  return <div className="text-label">{children}</div>;
 }
 
 function CodeToken({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex rounded-md bg-surface-subtle px-2 py-1 font-mono text-xs text-gray-600">
+    <span className="inline-flex rounded-md bg-surface-muted px-2 py-1 font-mono text-caption">
       {children}
     </span>
   );
@@ -1268,18 +1232,18 @@ function CodeToken({ children }: { children: ReactNode }) {
 
 function ColorSwatchCard({ swatch }: { swatch: Swatch }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-[var(--elevation-soft)]">
+    <div className="rounded-xl border border-surface bg-surface-card p-4 shadow-soft">
       <div
         className={cn(
-          "h-20 rounded-lg border border-white/60",
+          "h-20 rounded-lg border border-surface",
           swatch.className,
           swatch.dark ? "shadow-[inset_0_1px_0_rgb(255_255_255_/_0.18)]" : "",
         )}
       />
       <div className="mt-4 space-y-1.5">
-        <div className="text-sm font-semibold text-gray-900">{swatch.name}</div>
+        <div className="text-label font-semibold">{swatch.name}</div>
         <CodeToken>{swatch.value}</CodeToken>
-        <p className="text-sm leading-6 text-gray-600">{swatch.usage}</p>
+        <p className="text-body-sm">{swatch.usage}</p>
       </div>
     </div>
   );
@@ -1295,10 +1259,10 @@ function GradientCard({
   className: string;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-[var(--elevation-soft)]">
+    <div className="rounded-xl border border-surface bg-surface-card p-4 shadow-soft">
       <div className={cn("h-20 rounded-lg", className)} />
       <div className="mt-4 space-y-1.5">
-        <div className="text-sm font-semibold text-gray-900">{title}</div>
+        <div className="text-label font-semibold">{title}</div>
         <CodeToken>{recipe}</CodeToken>
       </div>
     </div>
@@ -1318,8 +1282,8 @@ function UsageItem({
     <div className="flex items-start gap-3">
       <div className={cn("mt-1 size-2 rounded-full", indicatorClassName)} />
       <div className="space-y-0.5">
-        <div className="text-sm font-medium text-gray-900">{title}</div>
-        <p className="text-sm leading-6 text-gray-600">{description}</p>
+        <div className="text-label">{title}</div>
+        <p className="text-body-sm">{description}</p>
       </div>
     </div>
   );
@@ -1338,7 +1302,7 @@ function FieldBlock({
     <div className="space-y-2">
       <Label>{label}</Label>
       {children}
-      {helper ? <p className="text-sm text-gray-600">{helper}</p> : null}
+      {helper ? <p className="text-body-sm">{helper}</p> : null}
     </div>
   );
 }
@@ -1353,7 +1317,7 @@ function InlineControl({
   return (
     <div className="flex items-center gap-3">
       {control}
-      <Label className="text-sm font-normal text-gray-700">{label}</Label>
+      <Label className="text-content">{label}</Label>
     </div>
   );
 }
@@ -1370,10 +1334,10 @@ function SwitchRow({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-surface-subtle/60 px-4 py-3">
+    <div className="flex items-center justify-between gap-4 rounded-lg border border-surface bg-surface-muted-soft px-4 py-3">
       <div className="space-y-0.5">
-        <div className="text-sm font-medium text-gray-900">{label}</div>
-        <p className="text-sm text-gray-600">{description}</p>
+        <div className="text-label">{label}</div>
+        <p className="text-body-sm">{description}</p>
       </div>
       <Switch defaultChecked={defaultChecked} disabled={disabled} />
     </div>
@@ -1384,11 +1348,11 @@ function IconCard({ tile }: { tile: IconTile }) {
   const Icon = tile.icon;
 
   return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card px-4 py-5 text-center shadow-[var(--elevation-soft)]">
-      <div className="flex size-11 items-center justify-center rounded-full bg-primary-tint text-primary">
+    <div className="flex flex-col items-center gap-3 rounded-xl border border-surface bg-surface-card px-4 py-5 text-center shadow-soft">
+      <div className="flex size-11 items-center justify-center rounded-full bg-brand-soft text-brand">
         <Icon className="size-5" />
       </div>
-      <div className="text-sm font-medium text-gray-700">{tile.label}</div>
+      <div className="text-label text-content">{tile.label}</div>
     </div>
   );
 }
@@ -1404,11 +1368,11 @@ function ShapePreview({
     <div className="space-y-3">
       <div
         className={cn(
-          "h-14 w-full border border-border bg-primary/10",
+          "h-14 w-full border border-surface bg-demo-shape",
           className,
         )}
       />
-      <div className="text-sm text-gray-700">{label}</div>
+      <div className="text-body-sm text-content">{label}</div>
     </div>
   );
 }
@@ -1424,11 +1388,11 @@ function ShadowPreview({
     <div className="space-y-3">
       <div
         className={cn(
-          "h-16 rounded-xl border border-border bg-card",
+          "h-16 rounded-xl border border-surface bg-surface-card",
           className,
         )}
       />
-      <div className="text-sm text-gray-700">{label}</div>
+      <div className="text-body-sm text-content">{label}</div>
     </div>
   );
 }
@@ -1443,9 +1407,9 @@ function GridPreview({
   columns: number;
 }) {
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-surface-subtle/70 p-4">
+    <div className="space-y-3 rounded-xl border border-surface bg-surface-muted-strong p-4">
       <div className="space-y-1">
-        <div className="text-sm font-medium text-gray-900">{title}</div>
+        <div className="text-label">{title}</div>
         <CodeToken>{recipe}</CodeToken>
       </div>
       <div
@@ -1459,7 +1423,7 @@ function GridPreview({
         {Array.from({ length: columns }).map((_, index) => (
           <div
             key={`${title}-${index}`}
-            className="rounded-lg bg-white px-3 py-4 text-center text-sm text-gray-600 shadow-[var(--elevation-soft)]"
+            className="rounded-lg bg-surface-card px-3 py-4 text-center text-body-sm shadow-soft"
           >
             Column {index + 1}
           </div>

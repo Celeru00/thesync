@@ -65,6 +65,501 @@
   --radius-4xl: 2rem;
 }
 
+@utility text-heading {
+  font-family: var(--font-poppins);
+  font-size: 1.875rem;
+  line-height: 2.25rem;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+@utility text-subheading {
+  font-family: var(--font-poppins);
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+@utility text-section-title {
+  font-family: var(--font-poppins);
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+@utility text-card-title {
+  font-family: var(--font-poppins);
+  font-size: 1.125rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+@utility text-body {
+  font-size: 1rem;
+  line-height: 1.75rem;
+  font-weight: 400;
+  color: var(--gray-700);
+}
+
+@utility text-body-sm {
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+  font-weight: 400;
+  color: var(--gray-600);
+}
+
+@utility text-caption {
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  font-weight: 400;
+  color: var(--gray-600);
+}
+
+@utility text-eyebrow {
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+  font-weight: 500;
+  color: var(--primary);
+}
+
+@utility text-label {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: var(--gray-900);
+}
+
+@utility shadow-soft {
+  box-shadow: var(--elevation-soft);
+}
+
+@utility shadow-elevated {
+  box-shadow: var(--elevation-elevated);
+}
+
+@utility shadow-glow {
+  box-shadow: var(--elevation-glow);
+}
+
+@utility bg-page {
+  background-color: var(--background);
+}
+
+@utility text-page {
+  color: var(--foreground);
+}
+
+@utility bg-surface-card {
+  background-color: var(--card);
+}
+
+@utility text-surface-card {
+  color: var(--card-foreground);
+}
+
+@utility bg-surface-overlay {
+  background-color: var(--popover);
+}
+
+@utility text-surface-overlay {
+  color: var(--popover-foreground);
+}
+
+@utility bg-surface-muted {
+  background-color: var(--surface-subtle);
+}
+
+@utility bg-surface-muted-soft {
+  background-color: color-mix(in srgb, var(--surface-subtle) 60%, transparent);
+}
+
+@utility bg-surface-muted-strong {
+  background-color: color-mix(in srgb, var(--surface-subtle) 80%, transparent);
+}
+
+@utility bg-brand {
+  background-color: var(--primary);
+}
+
+@utility bg-brand-strong {
+  background-color: var(--primary-dark);
+}
+
+@utility bg-brand-soft {
+  background-color: var(--primary-tint);
+}
+
+@utility text-brand {
+  color: var(--primary);
+}
+
+@utility text-brand-strong {
+  color: var(--primary-dark);
+}
+
+@utility text-brand-on {
+  color: var(--primary-foreground);
+}
+
+@utility text-content {
+  color: var(--gray-700);
+}
+
+@utility text-content-strong {
+  color: var(--gray-900);
+}
+
+@utility text-content-muted {
+  color: var(--gray-600);
+}
+
+@utility text-placeholder {
+  color: var(--muted-foreground);
+}
+
+@utility border-surface {
+  border-color: var(--border);
+}
+
+@utility border-brand-subtle {
+  border-color: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+@utility border-control {
+  border-color: var(--input);
+}
+
+@utility border-focus {
+  border-color: var(--primary);
+}
+
+@utility ring-focus {
+  --tw-ring-color: color-mix(in srgb, var(--ring) 15%, transparent);
+}
+
+@utility border-error {
+  border-color: var(--destructive);
+}
+
+@utility ring-error {
+  --tw-ring-color: color-mix(in srgb, var(--destructive) 12%, transparent);
+}
+
+@utility bg-field-disabled {
+  background-color: var(--surface-subtle);
+}
+
+@utility text-field-disabled {
+  color: var(--muted-foreground);
+}
+
+@utility bg-surface-frosted {
+  background-color: color-mix(in srgb, var(--popover) 90%, transparent);
+}
+
+@utility bg-separator {
+  background-color: var(--border);
+}
+
+@utility bg-demo-shape {
+  background-color: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+@utility bg-checkbox-selected {
+  background-color: var(--primary);
+}
+
+@utility border-checkbox-selected {
+  border-color: var(--primary);
+}
+
+@utility text-checkbox-selected {
+  color: var(--primary-foreground);
+}
+
+@utility bg-toggle-track-on {
+  background-color: var(--primary);
+}
+
+@utility bg-toggle-track-off {
+  background-color: var(--input);
+}
+
+@utility bg-toggle-thumb {
+  background-color: var(--background);
+}
+
+@utility bg-toggle-thumb-on {
+  background-color: var(--primary-foreground);
+}
+
+@utility bg-toggle-thumb-off {
+  background-color: var(--foreground);
+}
+
+@utility bg-button-primary {
+  background-color: var(--primary);
+}
+
+@utility bg-button-primary-hover {
+  background-color: var(--primary-dark);
+}
+
+@utility text-button-primary {
+  color: var(--primary-foreground);
+}
+
+@utility bg-button-secondary {
+  background-color: var(--primary-tint);
+}
+
+@utility bg-button-secondary-hover {
+  background-color: var(--secondary);
+}
+
+@utility text-button-secondary {
+  color: var(--secondary-foreground);
+}
+
+@utility bg-button-outline-hover {
+  background-color: var(--primary-tint);
+}
+
+@utility text-button-outline {
+  color: var(--gray-700);
+}
+
+@utility text-button-outline-hover {
+  color: var(--primary);
+}
+
+@utility bg-button-ghost-hover {
+  background-color: var(--primary-tint);
+}
+
+@utility text-button-ghost {
+  color: var(--gray-700);
+}
+
+@utility text-button-ghost-hover {
+  color: var(--primary);
+}
+
+@utility bg-button-destructive {
+  background-color: var(--destructive);
+}
+
+@utility bg-button-destructive-hover {
+  background-color: color-mix(in srgb, var(--destructive) 90%, black);
+}
+
+@utility text-button-destructive {
+  color: #ffffff;
+}
+
+@utility text-button-link {
+  color: var(--primary);
+}
+
+@utility text-button-link-hover {
+  color: var(--primary-dark);
+}
+
+@utility border-badge-primary {
+  border-color: var(--primary);
+}
+
+@utility bg-badge-primary {
+  background-color: var(--primary);
+}
+
+@utility text-badge-primary {
+  color: var(--primary-foreground);
+}
+
+@utility border-badge-secondary {
+  border-color: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+@utility bg-badge-secondary {
+  background-color: var(--secondary);
+}
+
+@utility text-badge-secondary {
+  color: var(--secondary-foreground);
+}
+
+@utility border-badge-success {
+  border-color: color-mix(in srgb, var(--success) 15%, transparent);
+}
+
+@utility bg-badge-success {
+  background-color: var(--success-soft);
+}
+
+@utility text-badge-success {
+  color: var(--success);
+}
+
+@utility border-badge-warning {
+  border-color: color-mix(in srgb, var(--warning) 15%, transparent);
+}
+
+@utility bg-badge-warning {
+  background-color: var(--warning-soft);
+}
+
+@utility text-badge-warning {
+  color: #92400e;
+}
+
+@utility border-badge-error {
+  border-color: color-mix(in srgb, var(--destructive) 15%, transparent);
+}
+
+@utility bg-badge-error {
+  background-color: color-mix(in srgb, var(--destructive) 10%, transparent);
+}
+
+@utility text-badge-error {
+  color: var(--destructive);
+}
+
+@utility border-badge-info {
+  border-color: color-mix(in srgb, var(--info) 15%, transparent);
+}
+
+@utility bg-badge-info {
+  background-color: var(--info-soft);
+}
+
+@utility text-badge-info {
+  color: var(--info);
+}
+
+@utility border-badge-special {
+  border-color: color-mix(in srgb, var(--violet) 15%, transparent);
+}
+
+@utility bg-badge-special {
+  background-color: var(--violet-soft);
+}
+
+@utility text-badge-special {
+  color: var(--violet);
+}
+
+@utility bg-option-hover {
+  background-color: var(--accent);
+}
+
+@utility text-option-hover {
+  color: var(--accent-foreground);
+}
+
+@utility border-alert-default {
+  border-color: var(--border);
+}
+
+@utility bg-alert-default {
+  background-color: var(--card);
+}
+
+@utility text-alert-default {
+  color: var(--card-foreground);
+}
+
+@utility border-alert-info {
+  border-color: color-mix(in srgb, var(--info) 20%, transparent);
+}
+
+@utility bg-alert-info {
+  background-color: color-mix(in srgb, var(--info-soft) 70%, transparent);
+}
+
+@utility text-alert-info {
+  color: var(--info);
+}
+
+@utility text-alert-info-body {
+  color: color-mix(in srgb, var(--info) 80%, transparent);
+}
+
+@utility border-alert-success {
+  border-color: color-mix(in srgb, var(--success) 20%, transparent);
+}
+
+@utility bg-alert-success {
+  background-color: color-mix(in srgb, var(--success-soft) 70%, transparent);
+}
+
+@utility text-alert-success {
+  color: var(--success);
+}
+
+@utility text-alert-success-body {
+  color: color-mix(in srgb, var(--success) 80%, transparent);
+}
+
+@utility border-alert-warning {
+  border-color: color-mix(in srgb, var(--warning) 20%, transparent);
+}
+
+@utility bg-alert-warning {
+  background-color: color-mix(in srgb, var(--warning-soft) 70%, transparent);
+}
+
+@utility text-alert-warning {
+  color: #78350f;
+}
+
+@utility text-alert-warning-body {
+  color: #92400e;
+}
+
+@utility border-alert-error {
+  border-color: color-mix(in srgb, var(--destructive) 20%, transparent);
+}
+
+@utility bg-alert-error {
+  background-color: color-mix(in srgb, var(--destructive) 10%, transparent);
+}
+
+@utility text-alert-error {
+  color: var(--destructive);
+}
+
+@utility text-alert-error-body {
+  color: color-mix(in srgb, var(--destructive) 80%, transparent);
+}
+
+@utility border-card-info {
+  border-color: color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+@utility bg-card-info {
+  background-color: var(--primary-tint);
+}
+
+@utility text-card-info {
+  color: var(--primary-dark);
+}
+
+@utility border-card-success {
+  border-color: color-mix(in srgb, var(--success) 15%, transparent);
+}
+
+@utility bg-card-success {
+  background-color: var(--success-soft);
+}
+
+@utility text-card-success {
+  color: var(--gray-700);
+}
+
 :root {
   --background: #fbfcff;
   --foreground: #111827;
