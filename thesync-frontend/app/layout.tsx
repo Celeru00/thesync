@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ThesisSync Design System",
+  title: "TheSync Design System",
   description:
-    "Design tokens, Tailwind theme variables, and shadcn/ui primitives for the ThesisSync frontend.",
+    "Design tokens, Tailwind theme variables, and shadcn/ui primitives for the TheSync frontend.",
 };
 
 export default function RootLayout({

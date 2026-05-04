@@ -248,7 +248,7 @@ const typeScale: TypeScale[] = [
   {
     name: "Body Text",
     sample:
-      "ThesisSync centralizes scheduling, approvals, and communication for consultations and defenses.",
+      "TheSync centralizes scheduling, approvals, and communication for consultations and defenses.",
     token: "text-body",
     usage: "Paragraphs and dense interface copy",
     className: "text-body",
@@ -446,7 +446,7 @@ export function DesignSystemShowcase() {
           <div className="flex flex-col gap-8">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-3xl space-y-4">
-                <Badge variant="secondary">ThesisSync Design System</Badge>
+                <Badge variant="secondary">TheSync Design System</Badge>
                 <div className="space-y-3">
                   <h1 className="text-heading">
                     Shared visual rules for scheduling, consultation, and
@@ -508,7 +508,7 @@ export function DesignSystemShowcase() {
                   </div>
                   <div className="space-y-2">
                     <div className="text-eyebrow">Logo & Name</div>
-                    <div className="text-subheading">ThesisSync</div>
+                    <div className="text-subheading">TheSync</div>
                     <p className="max-w-xl text-body">
                       A centralized scheduling system for thesis consultations
                       and defense coordination across the UP Mindanao academic
@@ -530,7 +530,7 @@ export function DesignSystemShowcase() {
               <CardContent className="space-y-3">
                 {[
                   "Students preparing proposals and final defenses",
-                  "Advisers and panelists reviewing schedules and requests",
+                  "Advisers and administrators reviewing schedules and requests",
                   "Program coordinators and administrators handling approvals",
                 ].map((item) => (
                   <div key={item} className="flex items-start gap-3">
@@ -1026,7 +1026,7 @@ export function DesignSystemShowcase() {
               <div className="mt-4 grid gap-6 xl:grid-cols-[280px_1fr]">
                 <div className="overflow-hidden rounded-[2rem] border border-surface shadow-elevated">
                   <Sidebar
-                    brandName="ThesisSync"
+                    brandName="TheSync"
                     brandSubtitle="Student Portal"
                     brandHref="#brand"
                     items={sidebarItems}
