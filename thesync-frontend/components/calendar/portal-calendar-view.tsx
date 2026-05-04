@@ -1,7 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  FileText,
+  UserRound,
+  X,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,9 +20,23 @@ import {
   CardFooter,
   CardHeader,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  studentAdvisers,
+  type ConsultationRequestType,
+} from "@/lib/mock/student-consultations";
 import { cn } from "@/lib/utils";
 
 type CalendarView = "month" | "week";
+type CalendarPortalRole = "student" | "adviser";
 type CalendarEventTone = "brand" | "violet";
 type CalendarEventStatus = "approved" | "pending";
 type CalendarEventType = "consultation" | "defense";
@@ -33,8 +56,25 @@ type CalendarDayCell = {
   inCurrentMonth: boolean;
 };
 
+type RequestDraft = {
+  date: Date;
+  endAt: Date;
+};
+
+type DragSelection = {
+  dayIndex: number;
+  startSlotIndex: number;
+  endSlotIndex: number;
+};
+
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const hours = Array.from({ length: 13 }, (_, index) => 8 + index);
+const weekTimeSlots = Array.from({ length: 24 }, (_, index) => {
+  const totalMinutes = 8 * 60 + index * 30;
+  const hour = Math.floor(totalMinutes / 60);
+  const minute = totalMinutes % 60;
+
+  return { hour, minute };
+});
 
 const monthFormatter = new Intl.DateTimeFormat("en-US", {
   month: "long",
@@ -48,6 +88,13 @@ const shortMonthFormatter = new Intl.DateTimeFormat("en-US", {
 const timeFormatter = new Intl.DateTimeFormat("en-US", {
   hour: "numeric",
   minute: "2-digit",
+});
+
+const requestDateFormatter = new Intl.DateTimeFormat("en-US", {
+  weekday: "long",
+  month: "long",
+  day: "numeric",
+  year: "numeric",
 });
 
 const sampleEvents: CalendarEvent[] = [
@@ -131,6 +178,10 @@ function addMonths(date: Date, amount: number) {
   return new Date(date.getFullYear(), date.getMonth() + amount, 1);
 }
 
+function addMinutes(date: Date, amount: number) {
+  return new Date(date.getTime() + amount * 60 * 1000);
+}
+
 function startOfWeek(date: Date) {
   return addDays(startOfDay(date), -startOfDay(date).getDay());
 }
@@ -202,9 +253,40 @@ function getWeekEvents(date: Date) {
   });
 }
 
-export function PortalCalendarView() {
+function getWeekSlotIndex(date: Date) {
+  const slotOffset = date.getHours() * 60 + date.getMinutes() - 8 * 60;
+
+  if (slotOffset < 0 || slotOffset >= weekTimeSlots.length * 30) {
+    return -1;
+  }
+
+  return Math.floor(slotOffset / 30);
+}
+
+function buildSlotDate(
+  day: Date,
+  slot: {
+    hour: number;
+    minute: number;
+  },
+) {
+  return new Date(
+    day.getFullYear(),
+    day.getMonth(),
+    day.getDate(),
+    slot.hour,
+    slot.minute,
+  );
+}
+
+export function PortalCalendarView({
+  portalRole = "student",
+}: {
+  portalRole?: CalendarPortalRole;
+}) {
   const [view, setView] = useState<CalendarView>("month");
   const [focusDate, setFocusDate] = useState(new Date(2026, 4, 1));
+  const [requestDraft, setRequestDraft] = useState<RequestDraft | null>(null);
 
   const monthCells = getMonthCells(focusDate);
   const monthEvents = sampleEvents
@@ -232,6 +314,7 @@ export function PortalCalendarView() {
   const pendingCount = monthEvents.filter(
     (event) => event.status === "pending",
   ).length;
+  const canCreateRequests = portalRole === "student";
 
   function handleNavigate(direction: -1 | 1) {
     if (view === "month") {
@@ -243,68 +326,85 @@ export function PortalCalendarView() {
   }
 
   return (
-    <section className="flex w-full flex-col gap-6">
-      <header className="space-y-2">
-        <h1 className="text-[2.35rem] leading-[1.08] font-semibold tracking-[-0.05em] text-content-strong">
-          Calendar
-        </h1>
-        <p className="max-w-3xl text-[1.05rem] leading-8 text-content-muted">
-          View and manage your consultation schedule
-        </p>
-      </header>
+    <>
+      <section className="flex w-full flex-col gap-6">
+        <header className="space-y-2">
+          <h1 className="text-[2.35rem] leading-[1.08] font-semibold tracking-[-0.05em] text-content-strong">
+            Calendar
+          </h1>
+          <p className="max-w-3xl text-[1.05rem] leading-8 text-content-muted">
+            View and manage your consultation schedule
+          </p>
+        </header>
 
-      <ViewToggle currentView={view} onChange={setView} />
+        <ViewToggle currentView={view} onChange={setView} />
 
-      {view === "month" ? (
-        <>
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-            <CalendarShell
-              focusDate={focusDate}
-              onNavigate={handleNavigate}
-              view={view}
-            >
-              <MonthGrid
-                eventsByDay={monthEventMap}
+        {view === "month" ? (
+          <>
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+              <CalendarShell
                 focusDate={focusDate}
-                monthCells={monthCells}
-                onSelectDate={setFocusDate}
+                onNavigate={handleNavigate}
+                view={view}
+              >
+                <MonthGrid
+                  eventsByDay={monthEventMap}
+                  focusDate={focusDate}
+                  monthCells={monthCells}
+                  onSelectDate={setFocusDate}
+                />
+              </CalendarShell>
+
+              <MonthDetailsRail
+                approvedCount={approvedCount}
+                focusedDayEvents={focusedDayEvents}
+                focusDate={focusDate}
+                pendingCount={pendingCount}
+                totalEvents={monthEvents.length}
               />
-            </CalendarShell>
+            </div>
 
-            <MonthDetailsRail
-              approvedCount={approvedCount}
-              focusedDayEvents={focusedDayEvents}
-              focusDate={focusDate}
-              pendingCount={pendingCount}
-              totalEvents={monthEvents.length}
-            />
-          </div>
-
-          <UpcomingEvents events={monthEvents} />
-        </>
-      ) : (
-        <CalendarShell
-          focusDate={focusDate}
-          footer={
-            <CardFooter className="border-card-info bg-card-info px-6 py-4 text-body-sm text-card-info sm:px-7">
-              <span className="font-semibold">Tip:</span>
-              <span className="ml-1">
-                Switch weeks to review consultation windows and defense blocks
-                at a glance.
-              </span>
-            </CardFooter>
-          }
-          onNavigate={handleNavigate}
-          view={view}
-        >
-          <WeekGrid
+            <UpcomingEvents events={monthEvents} />
+          </>
+        ) : (
+          <CalendarShell
             focusDate={focusDate}
-            weekDays={weekDays}
-            weekEvents={weekEvents}
-          />
-        </CalendarShell>
-      )}
-    </section>
+            footer={
+              <CardFooter className="border-card-info bg-card-info px-6 py-4 text-body-sm text-card-info sm:px-7">
+                <span className="font-semibold">Tip:</span>
+                <span className="ml-1">
+                  {canCreateRequests
+                    ? "Drag across open 30-minute slots to create a new consultation request."
+                    : "Switch weeks to review consultation windows and defense blocks at a glance."}
+                </span>
+              </CardFooter>
+            }
+            onNavigate={handleNavigate}
+            view={view}
+          >
+            <WeekGrid
+              canCreateRequests={canCreateRequests}
+              focusDate={focusDate}
+              onRequestSlotSelect={(date, endAt) =>
+                setRequestDraft({
+                  date,
+                  endAt,
+                })
+              }
+              weekDays={weekDays}
+              weekEvents={weekEvents}
+            />
+          </CalendarShell>
+        )}
+      </section>
+
+      {requestDraft ? (
+        <CreateRequestModal
+          draft={requestDraft}
+          onClose={() => setRequestDraft(null)}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -470,18 +570,142 @@ function MonthGrid({
 }
 
 function WeekGrid({
+  canCreateRequests,
   focusDate,
+  onRequestSlotSelect,
   weekDays,
   weekEvents,
 }: {
+  canCreateRequests: boolean;
   focusDate: Date;
+  onRequestSlotSelect: (date: Date, endAt: Date) => void;
   weekDays: Date[];
   weekEvents: CalendarEvent[];
 }) {
+  const [dragSelection, setDragSelection] = useState<DragSelection | null>(
+    null,
+  );
+  const dragSelectionRef = useRef<DragSelection | null>(null);
   const gridStyle = {
     gridTemplateColumns: "9rem repeat(7, minmax(8.5rem, 1fr))",
-    gridTemplateRows: `3.9rem repeat(${hours.length}, 3.75rem)`,
+    gridTemplateRows: `3.9rem repeat(${weekTimeSlots.length}, 1.875rem)`,
   } as const;
+  const occupiedSlots = useMemo(() => {
+    const slots = new Set<string>();
+
+    for (const event of weekEvents) {
+      const dayIndex = weekDays.findIndex((day) =>
+        isSameDay(day, event.startsAt),
+      );
+      const startSlotIndex = getWeekSlotIndex(event.startsAt);
+
+      if (dayIndex === -1 || startSlotIndex === -1) {
+        continue;
+      }
+
+      const slotSpan = Math.max(1, event.durationHours * 2);
+
+      for (let offset = 0; offset < slotSpan; offset += 1) {
+        slots.add(`${dayIndex}-${startSlotIndex + offset}`);
+      }
+    }
+
+    return slots;
+  }, [weekDays, weekEvents]);
+
+  useEffect(() => {
+    dragSelectionRef.current = dragSelection;
+  }, [dragSelection]);
+
+  const finalizeDragSelection = useCallback(() => {
+    const currentSelection = dragSelectionRef.current;
+
+    if (!currentSelection) {
+      return;
+    }
+
+    const startSlotIndex = Math.min(
+      currentSelection.startSlotIndex,
+      currentSelection.endSlotIndex,
+    );
+    const endSlotIndex = Math.max(
+      currentSelection.startSlotIndex,
+      currentSelection.endSlotIndex,
+    );
+    const selectedDay = weekDays[currentSelection.dayIndex];
+    const startAt = buildSlotDate(selectedDay, weekTimeSlots[startSlotIndex]);
+    const endAt = addMinutes(
+      buildSlotDate(selectedDay, weekTimeSlots[endSlotIndex]),
+      30,
+    );
+
+    setDragSelection(null);
+    onRequestSlotSelect(startAt, endAt);
+  }, [onRequestSlotSelect, weekDays]);
+
+  useEffect(() => {
+    if (!canCreateRequests) {
+      return;
+    }
+
+    const handlePointerUp = () => {
+      if (dragSelectionRef.current) {
+        finalizeDragSelection();
+      }
+    };
+
+    window.addEventListener("mouseup", handlePointerUp);
+
+    return () => {
+      window.removeEventListener("mouseup", handlePointerUp);
+    };
+  }, [canCreateRequests, finalizeDragSelection]);
+
+  function handleSlotMouseDown(dayIndex: number, slotIndex: number) {
+    if (!canCreateRequests || occupiedSlots.has(`${dayIndex}-${slotIndex}`)) {
+      return;
+    }
+
+    setDragSelection({
+      dayIndex,
+      startSlotIndex: slotIndex,
+      endSlotIndex: slotIndex,
+    });
+  }
+
+  function handleSlotMouseEnter(dayIndex: number, slotIndex: number) {
+    setDragSelection((currentSelection) => {
+      if (!currentSelection || currentSelection.dayIndex !== dayIndex) {
+        return currentSelection;
+      }
+
+      if (occupiedSlots.has(`${dayIndex}-${slotIndex}`)) {
+        return currentSelection;
+      }
+
+      return {
+        ...currentSelection,
+        endSlotIndex: slotIndex,
+      };
+    });
+  }
+
+  function isSlotSelected(dayIndex: number, slotIndex: number) {
+    if (!dragSelection || dragSelection.dayIndex !== dayIndex) {
+      return false;
+    }
+
+    const startSlotIndex = Math.min(
+      dragSelection.startSlotIndex,
+      dragSelection.endSlotIndex,
+    );
+    const endSlotIndex = Math.max(
+      dragSelection.startSlotIndex,
+      dragSelection.endSlotIndex,
+    );
+
+    return slotIndex >= startSlotIndex && slotIndex <= endSlotIndex;
+  }
 
   return (
     <div className="overflow-x-auto">
@@ -528,28 +752,64 @@ function WeekGrid({
             );
           })}
 
-          {hours.flatMap((hour, hourIndex) => {
+          {weekTimeSlots.flatMap((slot, slotIndex) => {
             return [
               <div
-                key={`label-${hour}`}
-                className="flex items-start justify-end border-r border-b border-surface px-3 pt-3 text-caption text-content-muted"
+                key={`label-${slot.hour}-${slot.minute}`}
+                className={cn(
+                  "flex items-start justify-end border-r border-b border-surface px-3 pt-2 text-caption text-content-muted",
+                  slot.minute === 0 && "border-b-transparent",
+                )}
                 style={{
                   gridColumnStart: 1,
-                  gridRowStart: hourIndex + 2,
+                  gridRowStart: slotIndex + 2,
                 }}
               >
-                {timeFormatter.format(new Date(2026, 0, 1, hour, 0))}
+                {slot.minute === 0
+                  ? timeFormatter.format(
+                      new Date(2026, 0, 1, slot.hour, slot.minute),
+                    )
+                  : null}
               </div>,
-              ...weekDays.map((day, dayIndex) => (
-                <div
-                  key={`${day.toISOString()}-${hour}`}
-                  className="border-r border-b border-surface bg-surface-card"
-                  style={{
-                    gridColumnStart: dayIndex + 2,
-                    gridRowStart: hourIndex + 2,
-                  }}
-                />
-              )),
+              ...weekDays.map((day, dayIndex) => {
+                const occupied = occupiedSlots.has(`${dayIndex}-${slotIndex}`);
+                const selected = isSlotSelected(dayIndex, slotIndex);
+
+                return (
+                  <button
+                    key={`${day.toISOString()}-${slot.hour}-${slot.minute}`}
+                    type="button"
+                    disabled={!canCreateRequests || occupied}
+                    aria-label={
+                      canCreateRequests && !occupied
+                        ? `Create consultation request on ${day.toDateString()} at ${timeFormatter.format(
+                            buildSlotDate(day, slot),
+                          )}`
+                        : undefined
+                    }
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      handleSlotMouseDown(dayIndex, slotIndex);
+                    }}
+                    onMouseEnter={() =>
+                      handleSlotMouseEnter(dayIndex, slotIndex)
+                    }
+                    className={cn(
+                      "border-r border-b border-surface bg-surface-card transition-colors select-none",
+                      slot.minute === 0 && "border-b-transparent",
+                      canCreateRequests &&
+                        !occupied &&
+                        "cursor-crosshair hover:bg-primary-tint/20 focus-visible:outline-none",
+                      selected &&
+                        "relative z-10 bg-primary/18 shadow-[inset_0_0_0_2px_color-mix(in_srgb,var(--primary)_60%,transparent)]",
+                    )}
+                    style={{
+                      gridColumnStart: dayIndex + 2,
+                      gridRowStart: slotIndex + 2,
+                    }}
+                  />
+                );
+              }),
             ];
           })}
 
@@ -557,9 +817,7 @@ function WeekGrid({
             const dayIndex = weekDays.findIndex((day) =>
               isSameDay(day, event.startsAt),
             );
-            const startRow = hours.findIndex(
-              (hour) => hour === event.startsAt.getHours(),
-            );
+            const startRow = getWeekSlotIndex(event.startsAt);
 
             if (dayIndex === -1 || startRow === -1) {
               return null;
@@ -574,7 +832,7 @@ function WeekGrid({
                 )}
                 style={{
                   gridColumnStart: dayIndex + 2,
-                  gridRow: `${startRow + 2} / span ${event.durationHours}`,
+                  gridRow: `${startRow + 2} / span ${Math.max(1, event.durationHours * 2)}`,
                 }}
               >
                 <div className="text-[0.98rem] leading-5 font-medium">
@@ -588,6 +846,203 @@ function WeekGrid({
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+function CreateRequestModal({
+  draft,
+  onClose,
+}: {
+  draft: RequestDraft;
+  onClose: () => void;
+}) {
+  const [requestType, setRequestType] = useState<ConsultationRequestType>();
+  const [adviserId, setAdviserId] = useState("");
+  const [topic, setTopic] = useState("");
+  const [description, setDescription] = useState("");
+
+  const selectedAdviser = useMemo(
+    () => studentAdvisers.find((adviser) => adviser.id === adviserId) ?? null,
+    [adviserId],
+  );
+  const canSubmit = Boolean(requestType && adviserId && topic.trim());
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 px-4 py-8 backdrop-blur-[2px]">
+      <div className="w-full max-w-[32rem] rounded-[1.75rem] border border-brand-subtle bg-surface-card shadow-elevated">
+        <div className="flex items-start justify-between gap-4 px-6 py-6 sm:px-7">
+          <div className="space-y-1.5">
+            <h2 className="text-subheading">Create Consultation Request</h2>
+            <p className="text-[1rem] leading-7 text-content-muted">
+              Schedule a new consultation for the selected time range
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="rounded-full"
+            onClick={onClose}
+            aria-label="Close create request modal"
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
+
+        <div className="space-y-5 px-6 pb-6 sm:px-7 sm:pb-7">
+          <div className="grid gap-3 rounded-[1.15rem] border border-brand-subtle bg-primary-tint/45 p-4 sm:grid-cols-2">
+            <SummaryTile
+              icon={CalendarDays}
+              label="Date"
+              value={requestDateFormatter.format(draft.date)}
+            />
+            <SummaryTile
+              icon={Clock3}
+              label="Time"
+              value={`${timeFormatter.format(draft.date)} - ${timeFormatter.format(
+                draft.endAt,
+              )}`}
+            />
+          </div>
+
+          <ModalField icon={FileText} label="Consultation Type">
+            <Select
+              value={requestType ?? undefined}
+              onValueChange={(value) =>
+                setRequestType(value as ConsultationRequestType)
+              }
+            >
+              <SelectTrigger className="h-11 rounded-[0.95rem]">
+                <SelectValue placeholder="Select consultation type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="consultation">Consultation</SelectItem>
+                <SelectItem value="defense">Defense</SelectItem>
+              </SelectContent>
+            </Select>
+          </ModalField>
+
+          <ModalField icon={UserRound} label="Select Adviser">
+            <Select
+              value={adviserId || undefined}
+              onValueChange={(value) => setAdviserId(value)}
+            >
+              <SelectTrigger className="h-11 rounded-[0.95rem]">
+                <SelectValue placeholder="Choose your adviser" />
+              </SelectTrigger>
+              <SelectContent>
+                {studentAdvisers.map((adviser) => (
+                  <SelectItem key={adviser.id} value={adviser.id}>
+                    {adviser.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </ModalField>
+
+          <ModalField label="Topic / Title">
+            <Input
+              value={topic}
+              onChange={(event) => setTopic(event.target.value)}
+              placeholder="e.g., Chapter 1 Review, Methodology Discussion"
+              className="h-11 rounded-[0.95rem]"
+            />
+          </ModalField>
+
+          <ModalField label="Description / Agenda">
+            <Textarea
+              value={description}
+              onChange={(event) =>
+                setDescription(event.target.value.slice(0, 350))
+              }
+              placeholder="Provide details about what you'd like to discuss during this consultation..."
+              className="min-h-[7.5rem] rounded-[0.95rem]"
+            />
+          </ModalField>
+
+          {selectedAdviser ? (
+            <div className="rounded-[1rem] border border-surface bg-surface-muted-soft px-4 py-3 text-body-sm text-content-muted">
+              Request will be sent to{" "}
+              <span className="font-medium text-content-strong">
+                {selectedAdviser.name}
+              </span>
+              {" · "}
+              {selectedAdviser.departmentCode}
+            </div>
+          ) : null}
+
+          <div className="flex flex-col gap-3 pt-2 sm:flex-row">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 flex-1 rounded-[0.95rem]"
+              onClick={onClose}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="h-11 flex-1 rounded-[0.95rem]"
+              disabled={!canSubmit}
+            >
+              Create Request
+            </Button>
+          </div>
+
+          <div className="text-center text-body-sm text-content-muted">
+            Need the full workflow?{" "}
+            <Link
+              href="/student/consultations/request"
+              className="font-medium text-brand underline-offset-4 hover:text-brand-strong hover:underline"
+            >
+              Open the full request form
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryTile({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof CalendarDays;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-[1rem] bg-surface-card/65 px-4 py-4">
+      <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-tint text-brand-strong">
+        <Icon className="size-5" />
+      </div>
+      <div className="space-y-0.5">
+        <div className="text-body-sm text-content-muted">{label}</div>
+        <div className="text-card-title">{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function ModalField({
+  children,
+  icon: Icon,
+  label,
+}: {
+  children: React.ReactNode;
+  icon?: typeof FileText;
+  label: string;
+}) {
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-center gap-3 text-[1rem] font-medium text-content-strong">
+        {Icon ? <Icon className="size-4" /> : null}
+        <span>{label}</span>
+      </div>
+      {children}
     </div>
   );
 }
