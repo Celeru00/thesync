@@ -44,7 +44,10 @@ export function ScheduleDetailsModal({
           <DialogTitle>{session.title}</DialogTitle>
           <div className="flex flex-wrap gap-2 pt-1">
             <Badge variant="default">{session.type}</Badge>
-            <Badge variant={session.status === "approved" ? "success" : "warning"} className="capitalize">
+            <Badge
+              variant={session.status === "approved" ? "success" : "warning"}
+              className="capitalize"
+            >
               {session.status}
             </Badge>
           </div>
@@ -67,7 +70,10 @@ export function ScheduleDetailsModal({
 
           {/* Participants */}
           <div className="space-y-3">
-            <SectionHeading icon={<UserRound className="size-4" />} label="Participants" />
+            <SectionHeading
+              icon={<UserRound className="size-4" />}
+              label="Participants"
+            />
             <div className="space-y-2">
               {session.participants.map((p) => (
                 <div
@@ -104,7 +110,10 @@ export function ScheduleDetailsModal({
 
           {/* Topic */}
           <div className="space-y-1.5">
-            <SectionHeading icon={<FileText className="size-4" />} label="Topic" />
+            <SectionHeading
+              icon={<FileText className="size-4" />}
+              label="Topic"
+            />
             <p className="text-body-sm">{session.topic}</p>
           </div>
 

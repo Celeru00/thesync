@@ -53,7 +53,9 @@ export function ConfirmationModal({
         showClose={false}
         className="max-w-md"
         // Destructive dialogs must not be dismissed by clicking outside
-        onPointerDownOutside={isDestructive ? (e) => e.preventDefault() : undefined}
+        onPointerDownOutside={
+          isDestructive ? (e) => e.preventDefault() : undefined
+        }
         onEscapeKeyDown={isDestructive ? (e) => e.preventDefault() : undefined}
       >
         <DialogHeader className="pb-2">

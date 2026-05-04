@@ -62,7 +62,10 @@ function DialogContent({
   );
 }
 
-function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+function DialogHeader({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn("flex flex-col gap-1 px-6 pb-4 pt-6", className)}
@@ -71,7 +74,10 @@ function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
   );
 }
 
-function DialogBody({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+function DialogBody({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn("max-h-[60vh] overflow-y-auto px-6", className)}
@@ -80,7 +86,10 @@ function DialogBody({ className, ...props }: React.HTMLAttributes<HTMLDivElement
   );
 }
 
-function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+function DialogFooter({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(

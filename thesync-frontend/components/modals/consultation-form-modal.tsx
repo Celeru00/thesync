@@ -23,7 +23,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { AdviserOption, ConsultationFormValues, ConsultationType } from "@/types/modal";
+import type {
+  AdviserOption,
+  ConsultationFormValues,
+  ConsultationType,
+} from "@/types/modal";
 
 const CONSULTATION_TYPES: ConsultationType[] = [
   "Regular",
@@ -166,7 +170,9 @@ export function ConsultationFormModal({
             <Input
               placeholder="Chapter 1 Review"
               value={form.topic}
-              onChange={(e) => setForm((f) => ({ ...f, topic: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, topic: e.target.value }))
+              }
             />
           </div>
 
