@@ -1,9 +1,35 @@
 import Link from "next/link";
-import { CalendarDays } from "lucide-react";
+import { AlertCircle, CalendarDays } from "lucide-react";
 
+import { GoogleRoleButton } from "@/components/auth/google-role-button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 
-export default function LoginPage() {
+type LoginPageProps = {
+  searchParams: Promise<{
+    error?: string | string[];
+  }>;
+};
+
+function getErrorMessage(error?: string) {
+  if (error === "google-auth-failed") {
+    return "Sign in failed. Use a @up.edu.ph Google account and try again.";
+  }
+
+  if (error === "missing-code") {
+    return "Google sign-in did not complete. Try starting the login flow again.";
+  }
+
+  return null;
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const params = await searchParams;
+  const errorCode = Array.isArray(params.error)
+    ? params.error[0]
+    : params.error;
+  const errorMessage = getErrorMessage(errorCode);
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-page text-page">
       <div
@@ -39,10 +65,28 @@ export default function LoginPage() {
               </p>
             </div>
 
+            {errorMessage ? (
+              <div className="px-6 pb-3">
+                <Alert variant="destructive">
+                  <AlertCircle />
+                  <AlertTitle>Google sign-in failed</AlertTitle>
+                  <AlertDescription>{errorMessage}</AlertDescription>
+                </Alert>
+              </div>
+            ) : null}
+
             <div className="space-y-3 px-6 pb-3">
-              <RoleButton label="Sign in as Student" tone="student" />
-              <RoleButton label="Sign in as Adviser" tone="adviser" />
-              <RoleButton label="Sign in as Admin" tone="admin" />
+              <GoogleRoleButton
+                label="Sign in as Student"
+                nextPath="/student"
+                tone="student"
+              />
+              <GoogleRoleButton
+                label="Sign in as Adviser"
+                nextPath="/adviser"
+                tone="adviser"
+              />
+              <RoleButton label="Sign in as Admin" tone="admin" disabled />
             </div>
 
             <div className="mt-3 h-px w-full bg-surface" />
@@ -75,9 +119,11 @@ export default function LoginPage() {
 function RoleButton({
   label,
   tone,
+  disabled = false,
 }: {
   label: string;
   tone: "student" | "adviser" | "admin";
+  disabled?: boolean;
 }) {
   const toneClassName = {
     student: "bg-[#3568EA] hover:bg-[#2E5ED8]",
@@ -89,6 +135,7 @@ function RoleButton({
     <Button
       type="button"
       size="lg"
+      disabled={disabled}
       className={`h-[3rem] w-full rounded-[0.95rem] justify-center gap-3 text-[1.05rem] font-medium shadow-none ${toneClassName}`}
     >
       <span
