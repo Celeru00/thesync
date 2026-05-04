@@ -5,21 +5,21 @@ import { Slot } from "radix-ui";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "group/badge inline-flex h-7 w-fit shrink-0 items-center justify-center gap-1 rounded-full border px-3 py-1 text-xs font-medium whitespace-nowrap transition-all focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5 aria-invalid:border-destructive aria-invalid:ring-destructive/20 [&>svg]:pointer-events-none [&>svg]:size-3!",
+  "group/badge inline-flex h-7 w-fit shrink-0 items-center justify-center gap-1 rounded-full border px-3 py-1 text-xs font-medium whitespace-nowrap transition-all focus-visible:border-focus focus-visible:ring-[3px] focus-visible:ring-focus has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5 aria-invalid:border-error aria-invalid:ring-error [&>svg]:pointer-events-none [&>svg]:size-3!",
   {
     variants: {
       variant: {
-        default: "border-primary bg-primary text-primary-foreground",
-        secondary: "border-primary/10 bg-secondary text-secondary-foreground",
-        success: "border-success/15 bg-success-soft text-success",
-        warning: "border-warning/15 bg-warning-soft text-amber-800",
-        destructive:
-          "border-destructive/15 bg-destructive/10 text-destructive focus-visible:ring-destructive/20",
-        info: "border-info/15 bg-info-soft text-info",
-        violet: "border-violet/15 bg-violet-soft text-violet",
-        outline: "border-border bg-card text-foreground",
-        ghost: "border-transparent bg-transparent text-muted-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+        default: "border-badge-primary bg-badge-primary text-badge-primary",
+        secondary:
+          "border-badge-secondary bg-badge-secondary text-badge-secondary",
+        success: "border-badge-success bg-badge-success text-badge-success",
+        warning: "border-badge-warning bg-badge-warning text-badge-warning",
+        destructive: "border-badge-error bg-badge-error text-badge-error",
+        info: "border-badge-info bg-badge-info text-badge-info",
+        violet: "border-badge-special bg-badge-special text-badge-special",
+        outline: "border-surface bg-surface-card text-content-strong",
+        ghost: "border-transparent bg-transparent text-content-muted",
+        link: "text-brand underline-offset-4 hover:text-brand-strong hover:underline",
       },
     },
     defaultVariants: {
