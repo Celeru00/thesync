@@ -19,6 +19,7 @@ const studentSidebarItems: SidebarItem[] = [
     href: "/student/consultations",
     label: "Consultations",
     icon: FileText,
+    match: "prefix",
   },
   {
     href: "/student/notifications",
@@ -35,6 +36,7 @@ const adviserSidebarItems: SidebarItem[] = [
     href: "/adviser/consultations",
     label: "Consultations",
     icon: FileText,
+    match: "prefix",
   },
   {
     href: "/adviser/availability",
@@ -56,6 +58,7 @@ const adminSidebarItems: SidebarItem[] = [
     href: "/admin/consultations",
     label: "Consultations",
     icon: FileText,
+    match: "prefix",
   },
   {
     href: "/admin/notifications",

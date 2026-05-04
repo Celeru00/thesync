@@ -1,5 +1,5 @@
 import { PortalCalendarView } from "@/components/calendar/portal-calendar-view";
 
 export default function StudentCalendarPage() {
-  return <PortalCalendarView />;
+  return <PortalCalendarView portalRole="student" />;
 }
