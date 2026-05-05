@@ -143,8 +143,9 @@ export function StudentConsultations() {
     "all",
   );
   const [selected, setSelected] = useState<Consultation | null>(null);
-  const [rescheduleTarget, setRescheduleTarget] =
-    useState<Consultation | null>(null);
+  const [rescheduleTarget, setRescheduleTarget] = useState<Consultation | null>(
+    null,
+  );
 
   const filtered =
     statusFilter === "all"
