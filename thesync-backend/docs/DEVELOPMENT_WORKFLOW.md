@@ -83,7 +83,7 @@ This creates or updates the project-local `.venv`.
 make pre-commit-install
 ```
 
-This backend lives inside a monorepo. Use the backend `Makefile` targets for pre-commit so the backend config is used explicitly instead of the repo-root config.
+This backend lives inside a monorepo. `make pre-commit-install` installs the repo-root hook so commits only run the checks that match the changed paths. Use `make pre-commit-run` when you want to run the backend-only hook set manually.
 
 3. Start the API locally:
 
