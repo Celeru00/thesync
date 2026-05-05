@@ -25,7 +25,12 @@ export function DataTable<TData>({
   className,
 }: DataTableProps<TData>) {
   return (
-    <div className={cn("overflow-hidden rounded-lg border border-surface", className)}>
+    <div
+      className={cn(
+        "overflow-hidden rounded-lg border border-surface",
+        className,
+      )}
+    >
       <div className="overflow-x-auto">
         <table className="w-full min-w-[44rem] border-collapse text-left text-sm">
           <thead className="bg-surface-muted-soft text-content-muted">
