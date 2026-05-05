@@ -1,3 +1,10 @@
+from repository.auth import (
+    AuthConfigurationError,
+    AuthenticationError,
+    decode_supabase_access_token,
+    extract_bearer_token,
+    get_authenticated_user,
+)
 from repository.config import Settings, get_settings
 from repository.database import SessionLocal, get_engine, get_session
 from repository.orm import (
@@ -16,8 +23,13 @@ from repository.orm import (
 
 __all__ = [
     "AuditLogRecord",
+    "AuthConfigurationError",
+    "AuthenticationError",
     "AvailabilitySlotRecord",
     "Base",
+    "decode_supabase_access_token",
+    "extract_bearer_token",
+    "get_authenticated_user",
     "InviteStatusRecord",
     "NotificationRecord",
     "PanelistAssignmentRecord",

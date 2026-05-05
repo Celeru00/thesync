@@ -11,6 +11,12 @@ RUN pip install --no-cache-dir uv
 COPY pyproject.toml uv.lock .python-version README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 
+COPY alembic ./alembic
+COPY controller ./controller
+COPY model ./model
+COPY repository ./repository
+COPY usecase ./usecase
+COPY alembic.ini ./alembic.ini
 COPY main.py ./main.py
 RUN uv sync --frozen --no-dev
 
@@ -26,4 +32,4 @@ COPY --from=builder /app /app
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
