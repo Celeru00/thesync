@@ -36,18 +36,11 @@ repos:
 
   - repo: local
     hooks:
-      - id: frontend-eslint
-        name: frontend-eslint
-        entry: npm
-        args: [--prefix, thesync-frontend, run, lint]
+      - id: frontend-ci-checks
+        name: frontend-ci-checks
+        entry: make
+        args: [-C, thesync-frontend, ci-checks]
         language: system
         pass_filenames: false
         files: ^thesync-frontend/
-
-      - id: frontend-prettier
-        name: frontend-prettier
-        entry: npm
-        args: [--prefix, thesync-frontend, run, format:check]
-        language: system
-        pass_filenames: false
-        files: ^thesync-frontend/
+        always_run: true
