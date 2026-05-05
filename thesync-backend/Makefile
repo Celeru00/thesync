@@ -10,6 +10,7 @@ FLAKE8 = $(PYTHON) -m flake8
 BANDIT = $(PYTHON) -m bandit
 PRE_COMMIT = $(PYTHON) -m pre_commit
 PRE_COMMIT_CONFIG = .pre-commit-config.yaml
+HOOK_PRE_COMMIT_CONFIG = ../.pre-commit-config.yaml
 CZ = $(PYTHON) -m commitizen
 UVICORN = $(PYTHON) -m uvicorn
 APP_MODULE = main:app
@@ -69,7 +70,7 @@ db-history: ## Show Alembic migration history
 	$(ALEMBIC) history
 
 pre-commit-install: ## Install git hooks
-	$(PRE_COMMIT) install -c $(PRE_COMMIT_CONFIG) --install-hooks
+	$(PRE_COMMIT) install -c $(HOOK_PRE_COMMIT_CONFIG) --install-hooks
 
 pre-commit-run: ## Run all pre-commit hooks on the full repo
 	$(PRE_COMMIT) run --all-files --config $(PRE_COMMIT_CONFIG)
