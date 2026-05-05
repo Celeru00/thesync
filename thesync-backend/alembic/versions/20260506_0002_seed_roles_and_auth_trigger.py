@@ -40,6 +40,12 @@ def upgrade() -> None:
             (3, 'admin')
           ON CONFLICT (id) DO UPDATE
           SET name = EXCLUDED.name;
+
+          PERFORM setval(
+            pg_get_serial_sequence('public.roles', 'id'),
+            COALESCE((SELECT MAX(id) FROM public.roles), 1),
+            true
+          );
         END
         $$;
         """)
@@ -82,3 +88,9 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;")
     op.execute("DROP FUNCTION IF EXISTS public.handle_new_user();")
+    op.execute("""
+        DELETE FROM public.roles
+        WHERE (id = 1 AND lower(name) = 'student')
+           OR (id = 2 AND lower(name) = 'adviser')
+           OR (id = 3 AND lower(name) = 'admin');
+        """)

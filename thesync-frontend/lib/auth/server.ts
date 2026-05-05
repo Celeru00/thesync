@@ -4,7 +4,11 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 
-import { getDashboardPathForRole, type AppRole } from "@/lib/auth/profile";
+import {
+  getDashboardPathForRole,
+  isRegistrationComplete,
+  type AppRole,
+} from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
 const DEFAULT_BACKEND_URL = "http://localhost:8000";
@@ -23,6 +27,7 @@ type ServerAuthState = {
   authUser: User | null;
   session: Session | null;
   appUser: AppSessionUser | null;
+  isRegistrationComplete: boolean;
 };
 
 function getApiBaseUrl() {
@@ -71,21 +76,32 @@ export const getServerAuthState = cache(async (): Promise<ServerAuthState> => {
       authUser: user ?? null,
       session: session ?? null,
       appUser: null,
+      isRegistrationComplete: false,
     };
   }
+
+  const registrationComplete = isRegistrationComplete(user);
 
   return {
     authUser: user,
     session,
-    appUser: await fetchCurrentAppUser(session.access_token),
+    appUser: registrationComplete
+      ? await fetchCurrentAppUser(session.access_token)
+      : null,
+    isRegistrationComplete: registrationComplete,
   };
 });
 
 export async function getRequiredAppUser() {
-  const { appUser, authUser } = await getServerAuthState();
+  const { appUser, authUser, isRegistrationComplete } =
+    await getServerAuthState();
 
   if (!authUser) {
     redirect("/login");
+  }
+
+  if (!isRegistrationComplete) {
+    redirect("/register?flow=signup");
   }
 
   if (!appUser) {

@@ -5,10 +5,15 @@ from functools import lru_cache
 import jwt
 from jwt import PyJWKClient
 from jwt.exceptions import InvalidTokenError, PyJWKClientError
+from model.auth import (
+    AuthenticatedUser,
+    SupabaseClaims,
+    is_registration_completed,
+    normalize_app_role_name,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
-from model.auth import AuthenticatedUser, SupabaseClaims, normalize_app_role_name
 from repository.config import get_settings
 from repository.database import SessionLocal
 from repository.orm import UserRecord
@@ -84,6 +89,9 @@ def decode_supabase_access_token(access_token: str) -> SupabaseClaims:
 
 def get_authenticated_user(access_token: str) -> tuple[SupabaseClaims, AuthenticatedUser]:
     claims = decode_supabase_access_token(access_token)
+
+    if not is_registration_completed(claims.user_metadata):
+        raise AuthenticationError("Authenticated account has not completed registration.")
 
     with SessionLocal() as session:
         statement = (

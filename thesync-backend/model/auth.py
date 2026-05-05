@@ -23,6 +23,10 @@ def normalize_app_role_name(value: str) -> AppRole | None:
     return None
 
 
+def is_registration_completed(metadata: dict[str, Any]) -> bool:
+    return metadata.get("registration_completed") is True
+
+
 class SupabaseClaims(DomainModel):
     """Verified claims extracted from a Supabase access token."""
 

@@ -15,48 +15,51 @@ type LoginPageProps = {
 
 function getErrorMessage(error?: string) {
   if (error === "google-auth-failed") {
-    return "Sign in failed. Use a @up.edu.ph Google account and try again.";
+    return "We couldn't sign you in. Use your @up.edu.ph Google account and try again.";
   }
 
   if (error === "missing-code") {
-    return "Google sign-in did not complete. Try starting the login flow again.";
+    return "Sign-in did not finish. Please try again.";
   }
 
   if (error === "account-lookup-failed") {
-    return "Your account could not be matched against the database. Check the users and roles tables and try again.";
+    return "We couldn't find your account. Try again or contact the team if this keeps happening.";
   }
 
   if (error === "role-lookup-failed") {
-    return "Your account role could not be resolved. Check the roles table and try again.";
+    return "We couldn't finish signing you in. Please try again.";
   }
 
   if (error === "role-not-supported") {
-    return "This account role is not supported in the current frontend.";
+    return "This account can't sign in here yet.";
+  }
+
+  if (error === "registration-sync-failed") {
+    return "We found your account, but couldn't finish signing you in. Please try again.";
   }
 
   if (error === "admin-not-provisioned") {
-    return "Admin accounts must be provisioned first. Sign in with a registered admin account.";
+    return "This admin account is not ready to use yet. Please contact the team.";
   }
 
   if (error === "role-mismatch") {
-    return "This Google account is already provisioned under a different role. Use the matching sign-in option or start the sign-up flow again.";
+    return "This Google account is already set up under a different role. Use the matching sign-in option to continue.";
   }
 
   return null;
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const { appUser } = await getServerAuthState();
-
-  if (appUser) {
-    redirect(getDashboardPathForRole(appUser.app_role));
-  }
-
   const params = await searchParams;
   const errorCode = Array.isArray(params.error)
     ? params.error[0]
     : params.error;
   const errorMessage = getErrorMessage(errorCode);
+  const { appUser, isRegistrationComplete } = await getServerAuthState();
+
+  if (!errorCode && isRegistrationComplete && appUser) {
+    redirect(getDashboardPathForRole(appUser.app_role));
+  }
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-page text-page">

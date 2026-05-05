@@ -111,6 +111,19 @@ export function getAuthAvatarUrl(user: User | null) {
   );
 }
 
+export function isRegistrationComplete(user: User | null) {
+  if (!user) {
+    return false;
+  }
+
+  const metadata =
+    user.user_metadata && typeof user.user_metadata === "object"
+      ? (user.user_metadata as Record<string, unknown>)
+      : {};
+
+  return metadata.registration_completed === true;
+}
+
 export function getAuthPrefill(user: User | null): AuthPrefill {
   if (!user) {
     return {
