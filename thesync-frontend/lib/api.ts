@@ -47,6 +47,16 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers,
   });
+
+  if (res.status === 401) {
+    const supabase = getSupabaseClient();
+
+    if (supabase) {
+      await supabase.auth.signOut();
+      window.location.href = "/login";
+    }
+  }
+
   if (!res.ok) throw new Error(`API error ${res.status}: ${path}`);
   return res.json() as Promise<T>;
 }

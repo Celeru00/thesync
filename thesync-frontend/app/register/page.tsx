@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 
 type RegisterPageProps = {
   searchParams: Promise<{
+    flow?: string | string[];
     role?: string | string[];
   }>;
 };
@@ -19,8 +20,10 @@ export default async function RegisterPage({
   searchParams,
 }: RegisterPageProps) {
   const params = await searchParams;
+  const flowParam = Array.isArray(params.flow) ? params.flow[0] : params.flow;
   const roleParam = Array.isArray(params.role) ? params.role[0] : params.role;
   const initialRole = isSignupRole(roleParam) ? roleParam : null;
+  const isSignupFlow = flowParam === "signup";
   const supabase = await createClient();
   const {
     data: { user },
@@ -33,7 +36,7 @@ export default async function RegisterPage({
       redirect("/login?error=role-not-supported");
     }
 
-    if (account) {
+    if (account && !isSignupFlow) {
       redirect(getDashboardPathForRole(account.role));
     }
   }

@@ -24,6 +24,10 @@ export async function GET(request: Request) {
   const loginUrl = new URL("/login", requestUrl.origin);
   const flow = requestUrl.searchParams.get("flow");
   const requestedRole = requestUrl.searchParams.get("role");
+  const isSignupFlow = flow === "signup";
+  const requestedSignupRole = isSignupRole(requestedRole)
+    ? requestedRole
+    : null;
 
   if (!code) {
     loginUrl.searchParams.set("error", "missing-code");
@@ -51,11 +55,12 @@ export async function GET(request: Request) {
   const { account, errorCode } = await getAppUserWithRole(supabase, user.id);
 
   if (errorCode) {
-    if (flow === "signup" || isSignupRole(requestedRole)) {
+    if (isSignupFlow || requestedSignupRole) {
       const registerUrl = new URL("/register", requestUrl.origin);
+      registerUrl.searchParams.set("flow", "signup");
 
-      if (isSignupRole(requestedRole)) {
-        registerUrl.searchParams.set("role", requestedRole);
+      if (requestedSignupRole) {
+        registerUrl.searchParams.set("role", requestedSignupRole);
       }
 
       return NextResponse.redirect(registerUrl);
@@ -76,6 +81,26 @@ export async function GET(request: Request) {
   }
 
   if (account) {
+    if (isSignupFlow) {
+      const registerUrl = new URL("/register", requestUrl.origin);
+      registerUrl.searchParams.set("flow", "signup");
+
+      if (requestedSignupRole) {
+        registerUrl.searchParams.set("role", requestedSignupRole);
+      }
+
+      return NextResponse.redirect(registerUrl);
+    }
+
+    if (
+      requestedRole &&
+      isAppRole(requestedRole) &&
+      requestedRole !== account.role
+    ) {
+      loginUrl.searchParams.set("error", "role-mismatch");
+      return NextResponse.redirect(loginUrl);
+    }
+
     return NextResponse.redirect(
       new URL(getDashboardPathForRole(account.role), requestUrl.origin),
     );
@@ -86,11 +111,12 @@ export async function GET(request: Request) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (flow === "signup" || requestedRole) {
+  if (isSignupFlow || requestedRole) {
     const registerUrl = new URL("/register", requestUrl.origin);
+    registerUrl.searchParams.set("flow", "signup");
 
-    if (isSignupRole(requestedRole)) {
-      registerUrl.searchParams.set("role", requestedRole);
+    if (requestedSignupRole) {
+      registerUrl.searchParams.set("role", requestedSignupRole);
     }
 
     return NextResponse.redirect(registerUrl);
