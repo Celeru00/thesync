@@ -427,10 +427,7 @@ export function RequestConsultation() {
             <Button variant="outline" asChild>
               <Link href="/student/consultations">Cancel</Link>
             </Button>
-            <Button
-              disabled={!canSubmit}
-              onClick={() => setShowSummary(true)}
-            >
+            <Button disabled={!canSubmit} onClick={() => setShowSummary(true)}>
               Submit Request
             </Button>
           </div>
