@@ -1,0 +1,135 @@
+name: Repo Quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repo-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: detect-changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Detect changed surfaces
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - "thesync-backend/**"
+              - ".github/workflows/backend-ci.yml"
+              - ".github/workflows/repo-quality.yml"
+              - ".pre-commit-config.yaml"
+            frontend:
+              - "thesync-frontend/**"
+              - ".github/workflows/frontend-ci.yml"
+              - ".github/workflows/repo-quality.yml"
+              - ".pre-commit-config.yaml"
+
+  backend:
+    name: backend-quality
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: thesync-backend
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: thesync-backend/.python-version
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --all-groups --frozen
+
+      - name: Run backend quality gate
+        run: make check
+
+      - name: Run backend pre-commit checks
+        run: uv run pre-commit run --all-files --show-diff-on-failure --config .pre-commit-config.yaml
+
+  frontend:
+    name: frontend-quality
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: thesync-frontend
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: thesync-frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run frontend quality gate
+        run: make ci-check
+
+  repo-quality:
+    name: repo-quality
+    needs:
+      - changes
+      - backend
+      - frontend
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Enforce repo quality status
+        env:
+          BACKEND_CHANGED: ${{ needs.changes.outputs.backend }}
+          FRONTEND_CHANGED: ${{ needs.changes.outputs.frontend }}
+          BACKEND_RESULT: ${{ needs.backend.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+        run: |
+          echo "backend changed: ${BACKEND_CHANGED}"
+          echo "backend result: ${BACKEND_RESULT}"
+          echo "frontend changed: ${FRONTEND_CHANGED}"
+          echo "frontend result: ${FRONTEND_RESULT}"
+
+          if [ "${BACKEND_CHANGED}" = "true" ] && [ "${BACKEND_RESULT}" != "success" ]; then
+            echo "Backend quality checks failed."
+            exit 1
+          fi
+
+          if [ "${FRONTEND_CHANGED}" = "true" ] && [ "${FRONTEND_RESULT}" != "success" ]; then
+            echo "Frontend quality checks failed."
+            exit 1
+          fi
+
+          echo "Repo quality gate passed."
