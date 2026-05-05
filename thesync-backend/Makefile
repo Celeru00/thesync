@@ -18,7 +18,8 @@ HOST ?= 0.0.0.0
 PORT ?= 8000
 COMMIT_MSG ?= feat: describe your change
 MIGRATION_MESSAGE ?= describe schema change
-PYTHON_TARGETS = main.py controller model repository usecase alembic
+PYTHON_PATHS = main.py controller model repository usecase alembic
+PYTHON_TARGETS = $(foreach path,$(PYTHON_PATHS),$(if $(wildcard $(path)),$(path),))
 
 help: ## Show available commands
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_-]+:.*## / {printf "%-20s %s\n", $$1, $$2}' Makefile
