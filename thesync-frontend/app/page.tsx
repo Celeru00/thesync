@@ -1,9 +1,18 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { CalendarDays } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { getServerAuthState } from "@/lib/auth/server";
+import { getDashboardPathForRole } from "@/lib/auth/profile";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const { appUser } = await getServerAuthState();
+
+  if (appUser) {
+    redirect(getDashboardPathForRole(appUser.app_role));
+  }
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-page text-page">
       <div

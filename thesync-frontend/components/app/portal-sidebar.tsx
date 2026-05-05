@@ -11,6 +11,7 @@ import {
 import { usePathname } from "next/navigation";
 
 import { Sidebar, type SidebarItem } from "@/components/ui/sidebar";
+import type { AppSessionUser } from "@/lib/auth/server";
 
 const studentSidebarItems: SidebarItem[] = [
   { href: "/student", label: "Dashboard", icon: LayoutDashboard },
@@ -73,49 +74,26 @@ const portalConfigs = {
     brandSubtitle: "Admin Portal",
     brandHref: "/admin",
     items: adminSidebarItems,
-    user: {
-      name: "Admin User",
-      email: "admin@up.edu.ph",
-      initials: "AU",
-    },
   },
   adviser: {
     brandSubtitle: "Adviser Portal",
     brandHref: "/adviser",
     items: adviserSidebarItems,
-    user: {
-      name: "Prof. Maria Santos",
-      email: "maria.santos@up.edu.ph",
-      initials: "MS",
-    },
   },
   student: {
     brandSubtitle: "Student Portal",
     brandHref: "/student",
     items: studentSidebarItems,
-    user: {
-      name: "John Doe",
-      email: "john.doe@up.edu.ph",
-      initials: "JD",
-    },
   },
 } as const;
 
-function getPortalConfig(pathname: string) {
-  if (pathname.startsWith("/admin")) {
-    return portalConfigs.admin;
-  }
+type PortalSidebarProps = {
+  currentUser: AppSessionUser;
+};
 
-  if (pathname.startsWith("/adviser")) {
-    return portalConfigs.adviser;
-  }
-
-  return portalConfigs.student;
-}
-
-export function PortalSidebar() {
+export function PortalSidebar({ currentUser }: PortalSidebarProps) {
   const pathname = usePathname();
-  const config = getPortalConfig(pathname);
+  const config = portalConfigs[currentUser.app_role];
 
   return (
     <Sidebar
@@ -124,8 +102,11 @@ export function PortalSidebar() {
       brandHref={config.brandHref}
       items={config.items}
       activeHref={pathname}
-      user={config.user}
-      logoutHref="/login"
+      user={{
+        name: currentUser.full_name,
+        email: currentUser.email,
+      }}
+      logoutHref="/auth/signout"
       className="min-h-fit w-full md:sticky md:top-0 md:h-screen md:w-68 md:shrink-0 md:self-start md:overflow-y-auto"
     />
   );

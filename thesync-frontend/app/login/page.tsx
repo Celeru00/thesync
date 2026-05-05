@@ -1,8 +1,11 @@
+import { redirect } from "next/navigation";
 import { AlertCircle, CalendarDays } from "lucide-react";
 
 import { GoogleRoleButton } from "@/components/auth/google-role-button";
 import { GoogleSignupLink } from "@/components/auth/google-signup-link";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { getServerAuthState } from "@/lib/auth/server";
+import { getDashboardPathForRole } from "@/lib/auth/profile";
 
 type LoginPageProps = {
   searchParams: Promise<{
@@ -35,10 +38,20 @@ function getErrorMessage(error?: string) {
     return "Admin accounts must be provisioned first. Sign in with a registered admin account.";
   }
 
+  if (error === "role-mismatch") {
+    return "This Google account is already provisioned under a different role. Use the matching sign-in option or start the sign-up flow again.";
+  }
+
   return null;
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const { appUser } = await getServerAuthState();
+
+  if (appUser) {
+    redirect(getDashboardPathForRole(appUser.app_role));
+  }
+
   const params = await searchParams;
   const errorCode = Array.isArray(params.error)
     ? params.error[0]
