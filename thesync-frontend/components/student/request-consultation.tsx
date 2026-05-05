@@ -38,9 +38,24 @@ const CONSULTATION_TYPES = [
 type ConsultationType = (typeof CONSULTATION_TYPES)[number];
 
 const ADVISERS = [
-  { id: "1", name: "Dr. Jasmine A. Malin", department: "DMPCS", availability: "Medium" },
-  { id: "2", name: "Dr. Proceso L. Fernandez", department: "DMPCS", availability: "High" },
-  { id: "3", name: "Dr. Lemuel Clark P. Velasco", department: "DMPCS", availability: "Low" },
+  {
+    id: "1",
+    name: "Dr. Jasmine A. Malin",
+    department: "DMPCS",
+    availability: "Medium",
+  },
+  {
+    id: "2",
+    name: "Dr. Proceso L. Fernandez",
+    department: "DMPCS",
+    availability: "High",
+  },
+  {
+    id: "3",
+    name: "Dr. Lemuel Clark P. Velasco",
+    department: "DMPCS",
+    availability: "Low",
+  },
 ];
 
 const PANELISTS = [
@@ -113,7 +128,10 @@ export function RequestConsultation() {
 
   const typeLabel = type.toLowerCase();
   const canSubmit =
-    adviserId !== "" && date !== "" && selectedTime !== null && topic.trim() !== "";
+    adviserId !== "" &&
+    date !== "" &&
+    selectedTime !== null &&
+    topic.trim() !== "";
 
   return (
     <div className="space-y-6">
@@ -201,7 +219,10 @@ export function RequestConsultation() {
                 </Label>
                 <div className="divide-y divide-surface rounded-xl border border-surface">
                   {PANELISTS.map((p) => (
-                    <div key={p.id} className="flex items-center gap-3 px-4 py-3">
+                    <div
+                      key={p.id}
+                      className="flex items-center gap-3 px-4 py-3"
+                    >
                       <Checkbox
                         id={p.id}
                         checked={panelists.includes(p.id)}
@@ -443,7 +464,10 @@ export function RequestConsultation() {
                   "You'll also receive in-app notifications about your consultation",
                   "The consultation will be added to your calendar upon approval",
                 ].map((note) => (
-                  <li key={note} className="flex items-start gap-2 text-body-sm">
+                  <li
+                    key={note}
+                    className="flex items-start gap-2 text-body-sm"
+                  >
                     <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-info" />
                     {note}
                   </li>
@@ -468,7 +492,9 @@ export function RequestConsultation() {
                   <p className="text-label">{adviser.department}</p>
                 </div>
                 <div>
-                  <p className="text-caption text-content-muted">Availability</p>
+                  <p className="text-caption text-content-muted">
+                    Availability
+                  </p>
                   <Badge
                     variant={
                       adviser.availability === "High"
