@@ -4,6 +4,7 @@ import {
   getAppUserWithRole,
   getDashboardPathForRole,
   isAppRole,
+  isRegistrationComplete,
   isSignupRole,
 } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -16,6 +17,36 @@ function getSafeNextPath(nextPath: string | null) {
   }
 
   return nextPath;
+}
+
+function getRegisterUrl(origin: string, requestedSignupRole: string | null) {
+  const registerUrl = new URL("/register", origin);
+  registerUrl.searchParams.set("flow", "signup");
+
+  if (requestedSignupRole) {
+    registerUrl.searchParams.set("role", requestedSignupRole);
+  }
+
+  return registerUrl;
+}
+
+async function finalizeProvisionedSession(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  role: "student" | "adviser" | "admin",
+) {
+  const { error: metadataError } = await supabase.auth.updateUser({
+    data: {
+      app_role: role,
+      registration_completed: true,
+    },
+  });
+
+  if (metadataError) {
+    return metadataError;
+  }
+
+  const { error: refreshError } = await supabase.auth.refreshSession();
+  return refreshError;
 }
 
 export async function GET(request: Request) {
@@ -52,27 +83,25 @@ export async function GET(request: Request) {
     return NextResponse.redirect(loginUrl);
   }
 
+  const registrationComplete = isRegistrationComplete(user);
   const { account, errorCode } = await getAppUserWithRole(supabase, user.id);
 
   if (errorCode) {
     if (isSignupFlow || requestedSignupRole) {
-      const registerUrl = new URL("/register", requestUrl.origin);
-      registerUrl.searchParams.set("flow", "signup");
-
-      if (requestedSignupRole) {
-        registerUrl.searchParams.set("role", requestedSignupRole);
-      }
-
-      return NextResponse.redirect(registerUrl);
+      return NextResponse.redirect(
+        getRegisterUrl(requestUrl.origin, requestedSignupRole),
+      );
     }
 
-    if (
-      requestedRole &&
-      isAppRole(requestedRole) &&
-      requestedRole !== "admin"
-    ) {
+    if (requestedRole === "admin") {
+      await supabase.auth.signOut();
+      loginUrl.searchParams.set("error", "admin-not-provisioned");
+      return NextResponse.redirect(loginUrl);
+    }
+
+    if (requestedRole && isSignupRole(requestedRole)) {
       return NextResponse.redirect(
-        new URL(getDashboardPathForRole(requestedRole), requestUrl.origin),
+        getRegisterUrl(requestUrl.origin, requestedRole),
       );
     }
 
@@ -81,15 +110,49 @@ export async function GET(request: Request) {
   }
 
   if (account) {
-    if (isSignupFlow) {
-      const registerUrl = new URL("/register", requestUrl.origin);
-      registerUrl.searchParams.set("flow", "signup");
+    if (!registrationComplete) {
+      if (account.role === "admin") {
+        if (requestedRole && requestedRole !== "admin") {
+          loginUrl.searchParams.set("error", "role-mismatch");
+          return NextResponse.redirect(loginUrl);
+        }
 
-      if (requestedSignupRole) {
-        registerUrl.searchParams.set("role", requestedSignupRole);
+        const finalizeError = await finalizeProvisionedSession(
+          supabase,
+          account.role,
+        );
+
+        if (finalizeError) {
+          loginUrl.searchParams.set("error", "registration-sync-failed");
+          return NextResponse.redirect(loginUrl);
+        }
+
+        return NextResponse.redirect(
+          new URL(getDashboardPathForRole(account.role), requestUrl.origin),
+        );
       }
 
-      return NextResponse.redirect(registerUrl);
+      if (requestedRole === "admin") {
+        await supabase.auth.signOut();
+        loginUrl.searchParams.set("error", "admin-not-provisioned");
+        return NextResponse.redirect(loginUrl);
+      }
+
+      const pendingSignupRole =
+        requestedSignupRole ??
+        (account.role === "student" || account.role === "adviser"
+          ? account.role
+          : null);
+
+      return NextResponse.redirect(
+        getRegisterUrl(requestUrl.origin, pendingSignupRole),
+      );
+    }
+
+    if (isSignupFlow) {
+      return NextResponse.redirect(
+        getRegisterUrl(requestUrl.origin, requestedSignupRole),
+      );
     }
 
     if (
@@ -107,19 +170,15 @@ export async function GET(request: Request) {
   }
 
   if (requestedRole === "admin") {
+    await supabase.auth.signOut();
     loginUrl.searchParams.set("error", "admin-not-provisioned");
     return NextResponse.redirect(loginUrl);
   }
 
   if (isSignupFlow || requestedRole) {
-    const registerUrl = new URL("/register", requestUrl.origin);
-    registerUrl.searchParams.set("flow", "signup");
-
-    if (requestedSignupRole) {
-      registerUrl.searchParams.set("role", requestedSignupRole);
-    }
-
-    return NextResponse.redirect(registerUrl);
+    return NextResponse.redirect(
+      getRegisterUrl(requestUrl.origin, requestedSignupRole),
+    );
   }
 
   return NextResponse.redirect(

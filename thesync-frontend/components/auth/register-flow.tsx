@@ -201,6 +201,33 @@ export function RegisterFlow({
       return;
     }
 
+    const { error: metadataError } = await supabase.auth.updateUser({
+      data: {
+        app_role: role,
+        registration_completed: true,
+      },
+    });
+
+    if (metadataError) {
+      console.error(metadataError);
+      setSubmitError(
+        "Your account was created, but the session could not be finalized. Try signing in again.",
+      );
+      setIsSubmitting(false);
+      return;
+    }
+
+    const { error: refreshError } = await supabase.auth.refreshSession();
+
+    if (refreshError) {
+      console.error(refreshError);
+      setSubmitError(
+        "Your account was created, but the session could not be refreshed. Try signing in again.",
+      );
+      setIsSubmitting(false);
+      return;
+    }
+
     router.replace(getDashboardPathForRole(role));
   }
 

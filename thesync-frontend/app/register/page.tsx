@@ -5,6 +5,7 @@ import {
   getAppUserWithRole,
   getAuthPrefill,
   getDashboardPathForRole,
+  isRegistrationComplete,
   isSignupRole,
 } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -28,6 +29,7 @@ export default async function RegisterPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const registrationComplete = isRegistrationComplete(user);
 
   if (user) {
     const { account, errorCode } = await getAppUserWithRole(supabase, user.id);
@@ -36,7 +38,11 @@ export default async function RegisterPage({
       redirect("/login?error=role-not-supported");
     }
 
-    if (account && !isSignupFlow) {
+    if (account?.role === "admin" && !registrationComplete) {
+      redirect("/login?error=admin-not-provisioned");
+    }
+
+    if (account && registrationComplete && !isSignupFlow) {
       redirect(getDashboardPathForRole(account.role));
     }
   }
