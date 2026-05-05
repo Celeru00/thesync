@@ -10,8 +10,14 @@ import {
   AlertCircle,
 } from "lucide-react";
 
+import {
+  FilterBar,
+  ListItem,
+  ListWrapper,
+  PaginationPlaceholder,
+  SearchInput,
+} from "@/components/data-display";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const initialNotifications = [
   {
@@ -71,6 +77,7 @@ const initialNotifications = [
 
 export default function AdviserNotificationsPage() {
   const [notifications, setNotifications] = useState(initialNotifications);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const toggleReadState = (title: string) => {
     setNotifications((prev) =>
@@ -87,6 +94,19 @@ export default function AdviserNotificationsPage() {
       prev.map((notification) => ({ ...notification, unread: false })),
     );
   };
+
+  const filteredNotifications = notifications.filter((notification) => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    if (normalizedSearch.length === 0) {
+      return true;
+    }
+
+    return [notification.title, notification.description, notification.time]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedSearch);
+  });
 
   return (
     <div className="flex flex-col gap-7">
@@ -108,22 +128,30 @@ export default function AdviserNotificationsPage() {
         </Button>
       </header>
 
-      <Card className="rounded-xl py-6 shadow-elevated">
-        <CardHeader className="px-6">
-          <CardTitle>All Notifications</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 px-6">
-          {notifications.map((notification) => {
+      <ListWrapper
+        title="All Notifications"
+        filters={
+          <FilterBar>
+            <SearchInput
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search notifications"
+              wrapperClassName="md:max-w-md"
+            />
+          </FilterBar>
+        }
+        footer={
+          <PaginationPlaceholder totalItems={filteredNotifications.length} />
+        }
+      >
+        {filteredNotifications.length > 0 ? (
+          filteredNotifications.map((notification) => {
             const Icon = notification.icon;
 
             return (
-              <article
+              <ListItem
                 key={notification.title}
-                className={
-                  notification.unread
-                    ? "rounded-lg border border-blue-200 bg-blue-50 p-4"
-                    : "rounded-lg border border-surface bg-surface-card p-4"
-                }
+                unread={notification.unread}
               >
                 <div className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
                   <div
@@ -166,11 +194,15 @@ export default function AdviserNotificationsPage() {
                     {notification.time}
                   </time>
                 </div>
-              </article>
+              </ListItem>
             );
-          })}
-        </CardContent>
-      </Card>
+          })
+        ) : (
+          <p className="rounded-lg border border-dashed border-control px-6 py-10 text-center text-body-sm text-content-muted">
+            No notifications match your search.
+          </p>
+        )}
+      </ListWrapper>
     </div>
   );
 }

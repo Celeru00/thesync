@@ -13,7 +13,13 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+  FilterBar,
+  ListItem,
+  ListWrapper,
+  PaginationPlaceholder,
+  SearchInput,
+} from "@/components/data-display";
 import {
   Select,
   SelectContent,
@@ -51,17 +57,24 @@ export default function AdviserConsultationsPage() {
   const [statusFilter, setStatusFilter] = useState<
     ConsultationRequestStatus | "all"
   >("all");
+  const [searchTerm, setSearchTerm] = useState("");
   const [requests, setRequests] = useState(studentConsultationRecords);
 
   const filteredRequests = useMemo(() => {
     return requests.filter((request) => {
-      if (statusFilter === "all") {
-        return true;
-      }
+      const matchesStatus =
+        statusFilter === "all" || request.status === statusFilter;
+      const normalizedSearch = searchTerm.trim().toLowerCase();
+      const matchesSearch =
+        normalizedSearch.length === 0 ||
+        [request.title, request.summary, request.studentName, request.timeLabel]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedSearch);
 
-      return request.status === statusFilter;
+      return matchesStatus && matchesSearch;
     });
-  }, [requests, statusFilter]);
+  }, [requests, searchTerm, statusFilter]);
 
   function handleStatusChange(
     requestId: string,
@@ -88,17 +101,23 @@ export default function AdviserConsultationsPage() {
         </p>
       </header>
 
-      <Card className="gap-0 rounded-[2rem] border-brand-subtle py-0 shadow-elevated">
-        <CardHeader className="flex flex-col gap-4 border-b border-surface px-6 py-6 sm:px-7 lg:flex-row lg:items-center lg:justify-between">
-          <h2 className="text-section-title">All Requests</h2>
-          <div className="w-full max-w-[13.5rem]">
+      <ListWrapper
+        title="All Requests"
+        filters={
+          <FilterBar>
+            <SearchInput
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search requests"
+              wrapperClassName="md:max-w-sm"
+            />
             <Select
               value={statusFilter}
               onValueChange={(value) =>
                 setStatusFilter(value as ConsultationRequestStatus | "all")
               }
             >
-              <SelectTrigger className="h-11 rounded-[1rem]">
+              <SelectTrigger className="h-10 md:w-48">
                 <SelectValue placeholder="Filter consultation requests" />
               </SelectTrigger>
               <SelectContent>
@@ -109,20 +128,25 @@ export default function AdviserConsultationsPage() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-        </CardHeader>
-
-        <CardContent className="space-y-4 px-6 py-6 sm:px-7">
-          {filteredRequests.map((request) => (
+          </FilterBar>
+        }
+        footer={<PaginationPlaceholder totalItems={filteredRequests.length} />}
+      >
+        {filteredRequests.length > 0 ? (
+          filteredRequests.map((request) => (
             <RequestCard
               key={request.id}
               request={request}
               onApprove={() => handleStatusChange(request.id, "approved")}
               onReject={() => handleStatusChange(request.id, "rejected")}
             />
-          ))}
-        </CardContent>
-      </Card>
+          ))
+        ) : (
+          <p className="rounded-lg border border-dashed border-control px-6 py-10 text-center text-body-sm text-content-muted">
+            No consultation requests match your filters.
+          </p>
+        )}
+      </ListWrapper>
     </section>
   );
 }
@@ -139,7 +163,7 @@ function RequestCard({
   const showActions = request.status === "pending";
 
   return (
-    <article className="rounded-[1.45rem] border border-surface bg-surface-card px-6 py-6">
+    <ListItem className="px-6 py-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-3">
@@ -217,7 +241,7 @@ function RequestCard({
           </div>
         </>
       ) : null}
-    </article>
+    </ListItem>
   );
 }
 
