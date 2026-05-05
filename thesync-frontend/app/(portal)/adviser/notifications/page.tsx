@@ -78,19 +78,19 @@ export default function AdviserNotificationsPage() {
       prev.map((notification) =>
         notification.title === title
           ? { ...notification, unread: !notification.unread }
-          : notification
-      )
+          : notification,
+      ),
     );
   };
 
   const markAllAsRead = () => {
     setNotifications((prev) =>
-      prev.map((notification) => ({ ...notification, unread: false }))
+      prev.map((notification) => ({ ...notification, unread: false })),
     );
   };
 
   const unreadCount = notifications.filter(
-    (notification) => notification.unread
+    (notification) => notification.unread,
   ).length;
 
   const notificationStats = [
