@@ -5,15 +5,15 @@ from functools import lru_cache
 import jwt
 from jwt import PyJWKClient
 from jwt.exceptions import InvalidTokenError, PyJWKClientError
+from sqlalchemy import select
+from sqlalchemy.orm import joinedload
+
 from model.auth import (
     AuthenticatedUser,
     SupabaseClaims,
     is_registration_completed,
     normalize_app_role_name,
 )
-from sqlalchemy import select
-from sqlalchemy.orm import joinedload
-
 from repository.config import get_settings
 from repository.database import SessionLocal
 from repository.orm import UserRecord
