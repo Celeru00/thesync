@@ -149,10 +149,7 @@ export default function AdviserNotificationsPage() {
             const Icon = notification.icon;
 
             return (
-              <ListItem
-                key={notification.title}
-                unread={notification.unread}
-              >
+              <ListItem key={notification.title} unread={notification.unread}>
                 <div className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
                   <div
                     className={`flex size-10 items-center justify-center rounded-full ${notification.iconClassName}`}
