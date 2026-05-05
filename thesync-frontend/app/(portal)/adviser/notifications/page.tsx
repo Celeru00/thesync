@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import {
   Bell,
   CalendarDays,
@@ -11,34 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-const notificationStats = [
-  {
-    label: "Total",
-    value: "5",
-    icon: Bell,
-    iconClassName: "bg-blue-100 text-blue-600",
-  },
-  {
-    label: "Unread",
-    value: "2",
-    icon: AlertCircle,
-    iconClassName: "bg-orange-100 text-orange-600",
-  },
-  {
-    label: "This Week",
-    value: "2",
-    icon: CalendarDays,
-    iconClassName: "bg-green-100 text-green-600",
-  },
-  {
-    label: "Important",
-    value: "1",
-    icon: AlertCircle,
-    iconClassName: "bg-purple-100 text-purple-600",
-  },
-];
-
-const notifications = [
+const initialNotifications = [
   {
     title: "Consultation Request Approved",
     description:
@@ -46,6 +22,15 @@ const notifications = [
     time: "2 hours ago",
     icon: CheckCircle2,
     iconClassName: "bg-success-soft text-success",
+    unread: true,
+  },
+  {
+    title: "Consultation Invitation",
+    description:
+      "You have been invited to join a consultation session on May 12, 2026 at 10:00 AM",
+    time: "30 minutes ago",
+    icon: Bell,
+    iconClassName: "bg-purple-100 text-purple-600",
     unread: true,
   },
   {
@@ -86,6 +71,55 @@ const notifications = [
 ];
 
 export default function AdviserNotificationsPage() {
+  const [notifications, setNotifications] = useState(initialNotifications);
+
+  const toggleReadState = (title: string) => {
+    setNotifications((prev) =>
+      prev.map((notification) =>
+        notification.title === title
+          ? { ...notification, unread: !notification.unread }
+          : notification
+      )
+    );
+  };
+
+  const markAllAsRead = () => {
+    setNotifications((prev) =>
+      prev.map((notification) => ({ ...notification, unread: false }))
+    );
+  };
+
+  const unreadCount = notifications.filter(
+    (notification) => notification.unread
+  ).length;
+
+  const notificationStats = [
+    {
+      label: "Total",
+      value: notifications.length.toString(),
+      icon: Bell,
+      iconClassName: "bg-blue-100 text-blue-600",
+    },
+    {
+      label: "Unread",
+      value: unreadCount.toString(),
+      icon: AlertCircle,
+      iconClassName: "bg-orange-100 text-orange-600",
+    },
+    {
+      label: "This Week",
+      value: "2",
+      icon: CalendarDays,
+      iconClassName: "bg-green-100 text-green-600",
+    },
+    {
+      label: "Important",
+      value: "1",
+      icon: AlertCircle,
+      iconClassName: "bg-purple-100 text-purple-600",
+    },
+  ];
+
   return (
     <div className="flex flex-col gap-7">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -95,7 +129,12 @@ export default function AdviserNotificationsPage() {
             Stay updated with your consultation activities
           </p>
         </div>
-        <Button type="button" variant="outline" className="rounded-lg">
+        <Button
+          type="button"
+          variant="outline"
+          className="rounded-lg"
+          onClick={markAllAsRead}
+        >
           <Check data-icon="inline-start" className="size-4" />
           Mark All as Read
         </Button>
@@ -157,16 +196,18 @@ export default function AdviserNotificationsPage() {
                       {notification.description}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-3">
-                      {notification.unread ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="xs"
-                          className="rounded-lg"
-                        >
-                          Mark as Read
-                        </Button>
-                      ) : null}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        className="rounded-lg"
+                        onClick={() => toggleReadState(notification.title)}
+                      >
+                        {notification.unread
+                          ? "Mark as Read"
+                          : "Mark as Unread"}
+                      </Button>
+
                       <Button
                         type="button"
                         variant="ghost"
