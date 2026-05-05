@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import Iterator
 from functools import lru_cache
 
 from sqlalchemy import create_engine
@@ -37,7 +37,7 @@ SessionLocal = sessionmaker(
 )
 
 
-def get_session() -> Generator[Session]:
+def get_session() -> Iterator[Session]:
     session = SessionLocal()
     try:
         yield session
