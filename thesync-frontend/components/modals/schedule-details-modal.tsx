@@ -45,7 +45,15 @@ export function ScheduleDetailsModal({
           <div className="flex flex-wrap gap-2 pt-1">
             <Badge variant="default">{session.type}</Badge>
             <Badge
-              variant={session.status === "approved" ? "success" : "warning"}
+              variant={
+                session.status === "approved"
+                  ? "success"
+                  : session.status === "completed"
+                    ? "outline"
+                    : session.status === "rejected"
+                      ? "destructive"
+                      : "warning"
+              }
               className="capitalize"
             >
               {session.status}

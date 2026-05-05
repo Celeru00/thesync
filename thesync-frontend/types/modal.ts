@@ -17,7 +17,7 @@ export interface ScheduleDetail {
   id: string;
   title: string;
   type: ConsultationType;
-  status: "approved" | "pending" | "cancelled";
+  status: "approved" | "pending" | "completed" | "rejected" | "cancelled";
   date: string;
   startTime: string;
   endTime: string;
