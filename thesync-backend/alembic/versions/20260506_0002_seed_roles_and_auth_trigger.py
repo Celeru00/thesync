@@ -18,8 +18,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute(
-        """
+    op.execute("""
         DO $$
         BEGIN
           IF EXISTS (SELECT 1 FROM public.roles WHERE lower(name) = 'student' AND id <> 1) THEN
@@ -43,11 +42,9 @@ def upgrade() -> None:
           SET name = EXCLUDED.name;
         END
         $$;
-        """
-    )
+        """)
 
-    op.execute(
-        """
+    op.execute("""
         CREATE OR REPLACE FUNCTION public.handle_new_user()
         RETURNS trigger
         LANGUAGE plpgsql
@@ -71,18 +68,15 @@ def upgrade() -> None:
           RETURN NEW;
         END;
         $$;
-        """
-    )
+        """)
 
-    op.execute(
-        """
+    op.execute("""
         DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
         CREATE TRIGGER on_auth_user_created
         AFTER INSERT ON auth.users
         FOR EACH ROW
         EXECUTE FUNCTION public.handle_new_user();
-        """
-    )
+        """)
 
 
 def downgrade() -> None:

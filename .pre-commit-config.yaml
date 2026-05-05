@@ -14,13 +14,16 @@ repos:
     hooks:
       - id: ruff
         files: ^thesync-backend/
-        args: [--fix]
+        args: [--fix, --config=thesync-backend/pyproject.toml]
 
-  - repo: https://github.com/psf/black
-    rev: 25.1.0
+  - repo: local
     hooks:
       - id: black
+        name: black
+        entry: thesync-backend/.venv/bin/python -m black --config thesync-backend/pyproject.toml
+        language: system
         files: ^thesync-backend/
+        types: [python]
 
   - repo: https://github.com/PyCQA/flake8
     rev: 7.2.0
