@@ -3,7 +3,6 @@
 import { useState } from "react";
 import {
   Bell,
-  CalendarDays,
   Check,
   CheckCircle2,
   Info,
@@ -89,37 +88,6 @@ export default function AdviserNotificationsPage() {
     );
   };
 
-  const unreadCount = notifications.filter(
-    (notification) => notification.unread,
-  ).length;
-
-  const notificationStats = [
-    {
-      label: "Total",
-      value: notifications.length.toString(),
-      icon: Bell,
-      iconClassName: "bg-blue-100 text-blue-600",
-    },
-    {
-      label: "Unread",
-      value: unreadCount.toString(),
-      icon: AlertCircle,
-      iconClassName: "bg-orange-100 text-orange-600",
-    },
-    {
-      label: "This Week",
-      value: "2",
-      icon: CalendarDays,
-      iconClassName: "bg-green-100 text-green-600",
-    },
-    {
-      label: "Important",
-      value: "1",
-      icon: AlertCircle,
-      iconClassName: "bg-purple-100 text-purple-600",
-    },
-  ];
-
   return (
     <div className="flex flex-col gap-7">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -139,32 +107,6 @@ export default function AdviserNotificationsPage() {
           Mark All as Read
         </Button>
       </header>
-
-      <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        {notificationStats.map((stat) => {
-          const Icon = stat.icon;
-
-          return (
-            <Card key={stat.label} className="rounded-xl py-6 shadow-elevated">
-              <CardContent className="flex items-center justify-between gap-4 px-6">
-                <div>
-                  <p className="text-body-sm text-content-muted">
-                    {stat.label}
-                  </p>
-                  <p className="mt-1 text-3xl font-semibold text-content-strong">
-                    {stat.value}
-                  </p>
-                </div>
-                <div
-                  className={`flex size-12 items-center justify-center rounded-xl ${stat.iconClassName}`}
-                >
-                  <Icon className="size-6" />
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </section>
 
       <Card className="rounded-xl py-6 shadow-elevated">
         <CardHeader className="px-6">
