@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ConsultationSummaryModal } from "@/components/modals/consultation-summary-modal";
 import { cn } from "@/lib/utils";
 
 const CONSULTATION_TYPES = [
@@ -125,6 +126,8 @@ export function RequestConsultation() {
     ...(adviser ? [adviser.name] : []),
     ...panelists.map((id) => PANELISTS.find((p) => p.id === id)?.name ?? ""),
   ].filter(Boolean);
+
+  const [showSummary, setShowSummary] = useState(false);
 
   const typeLabel = type.toLowerCase();
   const canSubmit =
@@ -424,7 +427,12 @@ export function RequestConsultation() {
             <Button variant="outline" asChild>
               <Link href="/student/consultations">Cancel</Link>
             </Button>
-            <Button disabled={!canSubmit}>Submit Request</Button>
+            <Button
+              disabled={!canSubmit}
+              onClick={() => setShowSummary(true)}
+            >
+              Submit Request
+            </Button>
           </div>
         </div>
 
@@ -512,6 +520,23 @@ export function RequestConsultation() {
           )}
         </div>
       </div>
+
+      {/* Consultation summary confirmation modal */}
+      <ConsultationSummaryModal
+        open={showSummary}
+        onOpenChange={setShowSummary}
+        summary={{
+          type,
+          adviser: adviser?.name ?? "—",
+          date,
+          time: selectedTime ?? "—",
+          topic,
+        }}
+        onConfirm={() => {
+          // TODO: call API to submit the consultation request
+          setShowSummary(false);
+        }}
+      />
     </div>
   );
 }
