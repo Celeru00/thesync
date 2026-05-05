@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: thesync-backend
+    runtime: docker
+    plan: starter
+    region: singapore
+    rootDir: thesync-backend
+    dockerfilePath: Dockerfile
+    dockerContext: .
+    autoDeployTrigger: checksPass
+    healthCheckPath: /healthz
+    buildFilter:
+      paths:
+        - thesync-backend/**
+        - .github/workflows/backend-ci.yml
+        - .github/workflows/repo-quality.yml
+        - render.yaml
+    envVars:
+      - key: APP_NAME
+        value: ThesisSync Backend
+      - key: APP_ENV
+        value: production
+      - key: SQLALCHEMY_ECHO
+        value: "false"
+      - key: FRONTEND_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_JWT_AUDIENCE
+        value: authenticated
+      - key: SUPABASE_JWT_SECRET
+        sync: false

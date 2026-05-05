@@ -11,7 +11,11 @@ class Settings(BaseSettings):
     app_name: str = "ThesisSync Backend"
     app_env: str = "development"
     database_url: str = "sqlite:///./thesync.db"
+    frontend_url: str = "http://localhost:3000"
     sqlalchemy_echo: bool = False
+    supabase_url: str | None = None
+    supabase_jwt_audience: str = "authenticated"
+    supabase_jwt_secret: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
