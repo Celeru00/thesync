@@ -6,6 +6,10 @@ It reflects the current codebase and the tools already configured in `pyproject.
 ## Tooling Standard
 
 - `uv` manages the environment and dependency execution.
+- The supported runtime is the repo-local `.venv`, not a global Python distribution.
+- `Pydantic` defines typed domain and API-facing data models.
+- `SQLAlchemy ORM` maps persistence models to the relational schema.
+- `Alembic` owns database schema migrations.
 - `Ruff` is the primary linter and import-order checker.
 - `Black` is the canonical formatter.
 - `Flake8` is kept as a secondary validation gate.
@@ -14,6 +18,7 @@ It reflects the current codebase and the tools already configured in `pyproject.
 - `pre-commit` wires the checks into the local git workflow.
 
 The root `Makefile` is the main entrypoint for daily development commands.
+`uv` is used to create and sync the virtualenv, but the actual repo commands run through `.venv/bin/python`.
 
 ## Clean Architecture Direction
 
@@ -21,6 +26,8 @@ The current repo already contains the right top-level boundaries for a clean-cod
 
 ```text
 .
+├── alembic/
+├── alembic.ini
 ├── main.py
 ├── controller/
 ├── usecase/
@@ -37,9 +44,11 @@ Use those boundaries consistently:
 - `usecase/`
   Business rules live here. This layer should express the application behavior without knowing FastAPI or storage details.
 - `repository/`
-  Data access and external integration code. Database queries, API clients, and persistence adapters belong here.
+  Data access and external integration code. SQLAlchemy ORM mappings, engine/session wiring, and persistence adapters belong here.
 - `model/`
-  Domain models, shared DTOs, and schema objects used across the application.
+  Pydantic domain models, shared DTOs, and schema objects used across the application.
+- `alembic/`
+  Migration history and migration environment for evolving the relational schema safely.
 
 Dependency direction should stay one-way:
 
@@ -66,6 +75,8 @@ Keep these rules in mind:
 make install
 ```
 
+This creates or updates the project-local `.venv`.
+
 2. Install local git hooks once per machine:
 
 ```bash
@@ -78,24 +89,44 @@ make pre-commit-install
 make dev
 ```
 
-4. While coding, keep the layering intact:
+4. Apply the current schema locally when database changes are involved:
+
+```bash
+make db-upgrade
+```
+
+5. While coding, keep the layering intact:
 
 - Add or update request handling in `controller/`.
 - Put business behavior in `usecase/`.
 - Put storage or external IO in `repository/`.
+- Keep Pydantic models in `model/`.
+- Keep SQLAlchemy table mappings in `repository/`.
 - Keep `main.py` focused on application setup.
 
-5. Before committing, auto-fix what can be fixed:
+6. Before committing, auto-fix what can be fixed:
 
 ```bash
 make fix
 ```
 
-6. Run the full local quality gate:
+7. Run the full local quality gate:
 
 ```bash
 make check
 ```
+
+## Schema Workflow
+
+Use Alembic for every schema change. Do not hand-edit the live database and then try to reverse-document it later.
+
+```bash
+make db-revision MIGRATION_MESSAGE="create schedule audit log"
+make db-upgrade
+make db-history
+```
+
+Do not run bare `alembic` from whatever global Python happens to be active. Use `make db-*` so the command runs through the repo-local virtualenv.
 
 ## Code Quality Workflow
 

@@ -57,20 +57,15 @@ Built with **FastAPI** (Python 3.12+), backed by **Supabase/PostgreSQL**, and in
 git clone git@github.com:CMSC-186-ThesiSync/thesissync-backend.git
 cd thesissync-backend
 
-# 2. Create and activate a virtual environment
-python -m venv .venv
-source .venv/bin/activate       # macOS/Linux
-# .venv\Scripts\activate        # Windows PowerShell
+# 2. Create or sync the project virtualenv
+uv sync --dev
 
-# 3. Install dependencies
-pip install --upgrade pip
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-
-# 4. Set up your environment variables
+# 3. Set up your environment variables
 cp .env.example .env
 # then open .env and fill in the values
 ```
+
+Use the repo-local virtualenv for commands. Supported workflows use `make ...` or `.venv/bin/python -m ...`, not globally installed tools.
 
 ---
 
@@ -139,10 +134,7 @@ thesissync-backend/
 
 ```bash
 # Dev server with hot reload
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# Or via the run script (once added)
-./scripts/dev.sh
+make dev
 ```
 
 The API will be live at `http://localhost:8000`.
@@ -178,17 +170,11 @@ FastAPI auto-generates OpenAPI docs. Once the server is running:
 ## Testing
 
 ```bash
-# Run all tests
-pytest
+# Run the local quality gate
+make check
 
-# With coverage
-pytest --cov=app --cov-report=term-missing
-
-# Only unit tests (fast)
-pytest tests/unit
-
-# Only integration tests (needs Supabase)
-pytest tests/integration
+# Apply migrations
+make db-upgrade
 ```
 
 CI runs both unit and integration tests on every PR.
@@ -202,14 +188,11 @@ CI runs both unit and integration tests on every PR.
 - **Type hints:** Required on all public functions
 
 ```bash
-# Format
-black app tests
+# Auto-fix and format
+make fix
 
-# Lint
-ruff check app tests
-
-# Auto-fix lint issues where possible
-ruff check --fix app tests
+# Verification
+make check
 ```
 
 CI will fail if code isn't formatted or has lint errors.
