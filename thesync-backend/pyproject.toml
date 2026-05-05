@@ -38,6 +38,9 @@ extend-exclude = [".venv"]
 [tool.ruff.lint]
 select = ["B", "E", "F", "I", "UP"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["controller", "model", "repository", "usecase"]
+
 [tool.commitizen]
 name = "cz_conventional_commits"
 version = "0.1.0"

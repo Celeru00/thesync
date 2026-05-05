@@ -9,12 +9,14 @@ repos:
       - id: trailing-whitespace
         files: ^thesync-backend/
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.12.0
+  - repo: local
     hooks:
       - id: ruff
+        name: ruff
+        entry: thesync-backend/.venv/bin/python -m ruff check --fix --config thesync-backend/pyproject.toml
+        language: system
         files: ^thesync-backend/
-        args: [--fix]
+        types: [python]
 
   - repo: local
     hooks:
