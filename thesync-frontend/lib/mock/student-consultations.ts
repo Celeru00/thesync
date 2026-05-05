@@ -23,6 +23,7 @@ export type StudentConsultationRecord = {
   title: string;
   summary: string;
   adviserId: string;
+  studentName: string;
   date: string;
   timeLabel: string;
   type: ConsultationRequestType;
@@ -156,6 +157,7 @@ export const studentConsultationRecords: StudentConsultationRecord[] = [
     title: "Chapter 1 Review",
     summary: "Introduction and Background",
     adviserId: "proceso-fernandez",
+    studentName: "John Doe",
     date: "2026-05-05",
     timeLabel: "2:00 PM - 3:00 PM",
     type: "consultation",
@@ -166,6 +168,7 @@ export const studentConsultationRecords: StudentConsultationRecord[] = [
     title: "Methodology Discussion",
     summary: "Research Design and Methods",
     adviserId: "jasmine-malin",
+    studentName: "Jane Smith",
     date: "2026-05-08",
     timeLabel: "10:00 AM - 11:00 AM",
     type: "consultation",
@@ -176,6 +179,7 @@ export const studentConsultationRecords: StudentConsultationRecord[] = [
     title: "Literature Review Feedback",
     summary: "Related Studies and Theoretical Framework",
     adviserId: "proceso-fernandez",
+    studentName: "John Doe",
     date: "2026-04-28",
     timeLabel: "3:00 PM - 4:00 PM",
     type: "consultation",
@@ -186,6 +190,7 @@ export const studentConsultationRecords: StudentConsultationRecord[] = [
     title: "Thesis Defense",
     summary: "Final Defense Presentation",
     adviserId: "lemuel-velasco",
+    studentName: "John Doe",
     date: "2026-05-15",
     timeLabel: "1:00 PM - 3:00 PM",
     type: "defense",
@@ -196,6 +201,7 @@ export const studentConsultationRecords: StudentConsultationRecord[] = [
     title: "Data Analysis Review",
     summary: "Statistical Analysis Methods",
     adviserId: "jasmine-malin",
+    studentName: "Jane Smith",
     date: "2026-05-03",
     timeLabel: "11:00 AM - 12:00 PM",
     type: "consultation",
