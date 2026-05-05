@@ -89,7 +89,11 @@ function getIconConfig(type: NotificationType) {
     case "reminder":
       return { Icon: Info, bg: "bg-info-soft", color: "text-info" };
     case "reschedule":
-      return { Icon: AlertCircle, bg: "bg-warning-soft", color: "text-warning" };
+      return {
+        Icon: AlertCircle,
+        bg: "bg-warning-soft",
+        color: "text-warning",
+      };
     case "completed":
       return { Icon: CheckCircle2, bg: "bg-success/10", color: "text-success" };
     case "info":
