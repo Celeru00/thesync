@@ -83,6 +83,8 @@ This creates or updates the project-local `.venv`.
 make pre-commit-install
 ```
 
+This backend lives inside a monorepo. Use the backend `Makefile` targets for pre-commit so the backend config is used explicitly instead of the repo-root config.
+
 3. Start the API locally:
 
 ```bash
