@@ -7,12 +7,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from controller.dependencies import CurrentUser
-from model.base import PaginatedResult
 from model.schedule import (
     Schedule,
     ScheduleApproveRequest,
     ScheduleCreateRequest,
     ScheduleListFilters,
+    ScheduleListResponse,
     ScheduleRejectRequest,
     ScheduleRescheduleRequest,
 )
@@ -40,7 +40,7 @@ class _UnavailableScheduleService:
     def create_schedule(self, *args, **kwargs) -> Schedule:
         self._raise()
 
-    def list_schedules(self, *args, **kwargs) -> PaginatedResult[Schedule]:
+    def list_schedules(self, *args, **kwargs) -> ScheduleListResponse:
         self._raise()
 
     def get_schedule(self, *args, **kwargs) -> Schedule:
@@ -90,20 +90,20 @@ ScheduleStatusServiceDependency = Annotated[
 
 
 def get_schedule_list_filters(
-    status_id: OptionalPositiveIntQuery = None,
-    type_id: OptionalPositiveIntQuery = None,
-    from_date: OptionalDateOrDateTimeQuery = None,
-    to_date: OptionalDateOrDateTimeQuery = None,
+    status_name: Annotated[str | None, Query(alias="status")] = None,
+    type_name: Annotated[str | None, Query(alias="type")] = None,
+    from_date: Annotated[date | datetime | None, Query(alias="from")] = None,
+    to_date: Annotated[date | datetime | None, Query(alias="to")] = None,
     page: PositiveIntQuery = 1,
-    page_size: PositiveIntQuery = 20,
+    limit: PositiveIntQuery = 20,
 ) -> ScheduleListFilters:
     return ScheduleListFilters(
-        status_id=status_id,
-        type_id=type_id,
+        status_name=status_name,
+        type_name=type_name,
         from_date=from_date,
         to_date=to_date,
         page=page,
-        page_size=page_size,
+        limit=limit,
     )
 
 
@@ -112,7 +112,10 @@ ScheduleListFiltersDependency = Annotated[ScheduleListFilters, Depends(get_sched
 
 def _raise_schedule_http_error(exc: Exception) -> None:
     if isinstance(exc, ScheduleValidationError):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
 
     if isinstance(exc, ScheduleForbiddenError):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
@@ -121,7 +124,12 @@ def _raise_schedule_http_error(exc: Exception) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     if isinstance(exc, ScheduleConflictError):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        detail: str | dict[str, str]
+        if exc.conflict_reason is not None:
+            detail = {"message": str(exc), "reason": exc.conflict_reason}
+        else:
+            detail = str(exc)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from exc
 
     if isinstance(exc, ScheduleServiceUnavailableError):
         raise HTTPException(
@@ -149,12 +157,12 @@ def create_schedule(
         _raise_schedule_http_error(exc)
 
 
-@router.get("", response_model=PaginatedResult[Schedule], summary="List schedules")
+@router.get("", response_model=ScheduleListResponse, summary="List schedules")
 def list_schedules(
     current_user: CurrentUser,
     filters: ScheduleListFiltersDependency,
     service: ScheduleServiceDependency,
-) -> PaginatedResult[Schedule]:
+) -> ScheduleListResponse:
     try:
         return service.list_schedules(current_user, filters)
     except (

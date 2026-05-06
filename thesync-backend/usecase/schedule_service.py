@@ -5,14 +5,23 @@ from typing import Final
 from uuid import UUID
 
 from model.auth import AuthenticatedUser
-from model.base import PaginatedResult
-from model.schedule import Schedule, ScheduleCreateRequest, ScheduleListFilters
+from model.schedule import (
+    Schedule,
+    ScheduleCreateRequest,
+    ScheduleListFilters,
+    ScheduleListResponse,
+)
 from model.user import User
 from repository.audit_repository import AuditRepository, get_audit_repository
+from repository.availability_repository import (
+    AvailabilityRepository,
+    get_availability_repository,
+)
 from repository.notification_repository import (
     NotificationRepository,
     get_notification_repository,
 )
+from repository.panelist_repository import PanelistRepository, get_panelist_repository
 from repository.schedule_repository import (
     ScheduleRepository,
     ScheduleRepositoryNotFoundError,
@@ -20,6 +29,7 @@ from repository.schedule_repository import (
 )
 from repository.supabase_client import SupabaseClientConfigurationError
 from repository.user_repository import UserRepository, get_user_repository
+from usecase.schedule_slot_guard import ScheduleSlotGuard
 from usecase.schedules import (
     ScheduleConflictError,
     ScheduleForbiddenError,
@@ -58,11 +68,15 @@ class DefaultScheduleService(ScheduleService):
     def __init__(
         self,
         schedule_repository: ScheduleRepository | None = None,
+        availability_repository: AvailabilityRepository | None = None,
+        panelist_repository: PanelistRepository | None = None,
         user_repository: UserRepository | None = None,
         notification_repository: NotificationRepository | None = None,
         audit_repository: AuditRepository | None = None,
     ) -> None:
         self._schedule_repository = schedule_repository
+        self._availability_repository = availability_repository
+        self._panelist_repository = panelist_repository
         self._user_repository = user_repository
         self._notification_repository = notification_repository
         self._audit_repository = audit_repository
@@ -86,6 +100,26 @@ class DefaultScheduleService(ScheduleService):
                 raise ScheduleServiceUnavailableError(str(exc)) from exc
 
         return self._user_repository
+
+    @property
+    def availability_repository(self) -> AvailabilityRepository:
+        if self._availability_repository is None:
+            try:
+                self._availability_repository = get_availability_repository()
+            except SupabaseClientConfigurationError as exc:
+                raise ScheduleServiceUnavailableError(str(exc)) from exc
+
+        return self._availability_repository
+
+    @property
+    def panelist_repository(self) -> PanelistRepository:
+        if self._panelist_repository is None:
+            try:
+                self._panelist_repository = get_panelist_repository()
+            except SupabaseClientConfigurationError as exc:
+                raise ScheduleServiceUnavailableError(str(exc)) from exc
+
+        return self._panelist_repository
 
     @property
     def notification_repository(self) -> NotificationRepository:
@@ -125,9 +159,58 @@ class DefaultScheduleService(ScheduleService):
             raise ScheduleNotFoundError("Adviser was not found.")
 
         if adviser.role_name is None or adviser.role_name.lower() != ADVISER_ROLE_NAME:
-            raise ScheduleValidationError("Selected user is not an adviser.")
+            raise ScheduleNotFoundError("Adviser was not found.")
 
         return adviser
+
+    def _ensure_schedule_type_exists(self, type_id: int) -> None:
+        schedule_type_name = self.schedule_repository.get_type_name_by_id(type_id)
+        if schedule_type_name is None:
+            raise ScheduleValidationError("Selected schedule type is invalid.")
+
+    def _resolve_lookup_filter_id(
+        self,
+        *,
+        raw_value: str | None,
+        filter_name: str,
+        lookup_id_resolver,
+        lookup_name_resolver,
+    ) -> int | None:
+        if raw_value is None:
+            return None
+
+        normalized_value = raw_value.strip().lower()
+        if normalized_value.isdigit():
+            resolved_id = int(normalized_value)
+            if resolved_id <= 0 or lookup_name_resolver(resolved_id) is None:
+                raise ScheduleValidationError(f"Selected {filter_name} filter is invalid.")
+            return resolved_id
+
+        resolved_id = lookup_id_resolver(normalized_value)
+        if resolved_id is None:
+            raise ScheduleValidationError(f"Selected {filter_name} filter is invalid.")
+
+        return resolved_id
+
+    def _resolve_list_filters(self, filters: ScheduleListFilters) -> ScheduleListFilters:
+        resolved_status_id = self._resolve_lookup_filter_id(
+            raw_value=filters.status_name,
+            filter_name="status",
+            lookup_id_resolver=self.schedule_repository.get_status_id_by_name,
+            lookup_name_resolver=self.schedule_repository.get_status_name_by_id,
+        )
+        resolved_type_id = self._resolve_lookup_filter_id(
+            raw_value=filters.type_name,
+            filter_name="type",
+            lookup_id_resolver=self.schedule_repository.get_type_id_by_name,
+            lookup_name_resolver=self.schedule_repository.get_type_name_by_id,
+        )
+        return filters.model_copy(
+            update={
+                "status_id": resolved_status_id,
+                "type_id": resolved_type_id,
+            }
+        )
 
     def _get_schedule_or_raise(self, schedule_id: UUID) -> Schedule:
         schedule = self.schedule_repository.get_by_id(schedule_id)
@@ -150,8 +233,12 @@ class DefaultScheduleService(ScheduleService):
         if current_user.app_role == STUDENT_ROLE_NAME and schedule.student_id == current_user.id:
             return schedule
 
-        if current_user.app_role == ADVISER_ROLE_NAME and schedule.adviser_id == current_user.id:
-            return schedule
+        if current_user.app_role == ADVISER_ROLE_NAME:
+            if schedule.adviser_id == current_user.id:
+                return schedule
+
+            if self.panelist_repository.get(schedule.id, current_user.id) is not None:
+                return schedule
 
         raise ScheduleForbiddenError("You do not have access to this schedule.")
 
@@ -185,25 +272,9 @@ class DefaultScheduleService(ScheduleService):
             remarks=remarks,
         )
 
-    def _raise_if_adviser_double_booked(
-        self,
-        *,
-        adviser_id: UUID,
-        scheduled_at: datetime | None,
-    ) -> None:
-        normalized_scheduled_at = _normalize_datetime(scheduled_at)
-        if normalized_scheduled_at is None:
-            return
-
-        approved_status_id = self._get_required_status_id(APPROVED_STATUS_NAME)
-        rescheduled_status_id = self._get_required_status_id(RESCHEDULED_STATUS_NAME)
-        has_conflict = self.schedule_repository.adviser_has_schedule_conflict(
-            adviser_id=adviser_id,
-            scheduled_at=normalized_scheduled_at,
-            status_ids=[approved_status_id, rescheduled_status_id],
-        )
-        if has_conflict:
-            raise ScheduleConflictError("The adviser is already booked at the requested time.")
+    @property
+    def slot_guard(self) -> ScheduleSlotGuard:
+        return ScheduleSlotGuard(self.schedule_repository, self.availability_repository)
 
     def create_schedule(
         self,
@@ -212,9 +283,10 @@ class DefaultScheduleService(ScheduleService):
     ) -> Schedule:
         self._require_student(current_user)
         adviser = self._get_adviser_or_raise(payload.adviser_id)
+        self._ensure_schedule_type_exists(payload.type_id)
         normalized_scheduled_at = _normalize_datetime(payload.scheduled_at)
 
-        self._raise_if_adviser_double_booked(
+        self.slot_guard.ensure_slot_available(
             adviser_id=adviser.id,
             scheduled_at=normalized_scheduled_at,
         )
@@ -252,17 +324,31 @@ class DefaultScheduleService(ScheduleService):
         self,
         current_user: AuthenticatedUser,
         filters: ScheduleListFilters,
-    ) -> PaginatedResult[Schedule]:
+    ) -> ScheduleListResponse:
+        resolved_filters = self._resolve_list_filters(filters)
+
         if current_user.app_role == STUDENT_ROLE_NAME:
-            return self.schedule_repository.list_by_student(current_user.id, filters)
+            page = self.schedule_repository.list_by_student(current_user.id, resolved_filters)
+        elif current_user.app_role == ADVISER_ROLE_NAME:
+            panelist_schedule_ids = self.panelist_repository.list_schedule_ids_by_panelist(
+                current_user.id
+            )
+            page = self.schedule_repository.list_by_adviser_or_panelist(
+                current_user.id,
+                panelist_schedule_ids,
+                resolved_filters,
+            )
+        elif current_user.app_role == ADMIN_ROLE_NAME:
+            page = self.schedule_repository.list_all(resolved_filters)
+        else:
+            raise ScheduleForbiddenError("You do not have permission to list schedules.")
 
-        if current_user.app_role == ADVISER_ROLE_NAME:
-            return self.schedule_repository.list_by_adviser(current_user.id, filters)
-
-        if current_user.app_role == ADMIN_ROLE_NAME:
-            return self.schedule_repository.list_all(filters)
-
-        raise ScheduleForbiddenError("You do not have permission to list schedules.")
+        return ScheduleListResponse(
+            items=page.items,
+            total=page.total,
+            page=page.page,
+            limit=page.page_size,
+        )
 
     def get_schedule(
         self,

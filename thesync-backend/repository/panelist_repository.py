@@ -145,6 +145,25 @@ class PanelistRepository:
 
         return [_to_panelist_assignment(row) for row in _rows(response.data)]
 
+    def list_schedule_ids_by_panelist(self, panelist_id: UUID | str) -> list[UUID]:
+        response = (
+            self._client.table("panelist_assignments")
+            .select("schedule_id")
+            .eq("panelist_id", str(panelist_id))
+            .execute()
+        )
+        schedule_ids: list[UUID] = []
+        for row in _rows(response.data):
+            schedule_id = row.get("schedule_id")
+            if not isinstance(schedule_id, str):
+                continue
+            try:
+                schedule_ids.append(UUID(schedule_id))
+            except ValueError:
+                continue
+
+        return schedule_ids
+
     def get(self, schedule_id: UUID | str, panelist_id: UUID | str) -> PanelistAssignment | None:
         response = (
             self._client.table("panelist_assignments")

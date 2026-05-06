@@ -5,12 +5,20 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from model.base import PaginatedResult
-from model.schedule import Schedule, ScheduleListFilters
+from model.schedule import Schedule, ScheduleListFilters, ScheduleListItem
 from repository.supabase_client import get_supabase_admin_client
 
 SCHEDULE_SELECT = (
     "id, student_id, adviser_id, type_id, status_id, topic, requested_at, "
     "scheduled_at, google_calendar_event_id, meet_link, created_at"
+)
+SCHEDULE_LIST_SELECT = (
+    "id, student_id, adviser_id, type_id, status_id, topic, requested_at, "
+    "scheduled_at, google_calendar_event_id, meet_link, created_at, "
+    "student:users!fk_schedules_student_id_users(full_name), "
+    "adviser:users!fk_schedules_adviser_id_users(full_name), "
+    "schedule_type:schedule_types!fk_schedules_type_id_schedule_types(name), "
+    "schedule_status:schedule_statuses!fk_schedules_status_id_schedule_statuses(name)"
 )
 
 
@@ -78,6 +86,51 @@ def _to_schedule(row: dict[str, Any]) -> Schedule:
     )
 
 
+def _extract_nested_text(
+    row: dict[str, Any],
+    relation_key: str,
+    field_name: str,
+) -> str | None:
+    related = row.get(relation_key)
+    if isinstance(related, dict):
+        value = related.get(field_name)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        return None
+
+    if isinstance(related, list):
+        for item in related:
+            if not isinstance(item, dict):
+                continue
+            value = item.get(field_name)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+
+    return None
+
+
+def _to_schedule_list_item(row: dict[str, Any]) -> ScheduleListItem:
+    return ScheduleListItem.model_validate(
+        {
+            "id": row.get("id"),
+            "student_id": row.get("student_id"),
+            "adviser_id": row.get("adviser_id"),
+            "type_id": row.get("type_id"),
+            "status_id": row.get("status_id"),
+            "topic": row.get("topic"),
+            "requested_at": row.get("requested_at"),
+            "scheduled_at": row.get("scheduled_at"),
+            "google_calendar_event_id": row.get("google_calendar_event_id"),
+            "meet_link": row.get("meet_link"),
+            "created_at": row.get("created_at"),
+            "student_full_name": _extract_nested_text(row, "student", "full_name"),
+            "adviser_full_name": _extract_nested_text(row, "adviser", "full_name"),
+            "type_name": _extract_nested_text(row, "schedule_type", "name"),
+            "status_name": _extract_nested_text(row, "schedule_status", "name"),
+        }
+    )
+
+
 class ScheduleRepository:
     """Supabase-backed repository for raw schedule table reads and writes."""
 
@@ -88,7 +141,7 @@ class ScheduleRepository:
         self,
         *,
         filters: ScheduleListFilters,
-        select_clause: str = SCHEDULE_SELECT,
+        select_clause: str = SCHEDULE_LIST_SELECT,
     ) -> Any:
         query = self._client.table("schedules").select(select_clause, count="exact")
 
@@ -107,8 +160,8 @@ class ScheduleRepository:
         if to_dt is not None:
             query = query.lte("scheduled_at", to_dt.isoformat())
 
-        start = (filters.page - 1) * filters.page_size
-        end = start + filters.page_size - 1
+        start = (filters.page - 1) * filters.limit
+        end = start + filters.limit - 1
 
         return query.order("scheduled_at").order("requested_at").range(start, end)
 
@@ -118,7 +171,7 @@ class ScheduleRepository:
         filters: ScheduleListFilters,
         scope_column: str | None = None,
         scope_value: UUID | str | None = None,
-    ) -> PaginatedResult[Schedule]:
+    ) -> PaginatedResult[ScheduleListItem]:
         query = self._build_list_query(filters=filters)
 
         if scope_column is not None and scope_value is not None:
@@ -128,11 +181,11 @@ class ScheduleRepository:
         rows = _rows(response.data)
         total = getattr(response, "count", None)
 
-        return PaginatedResult[Schedule](
-            items=[_to_schedule(row) for row in rows],
+        return PaginatedResult[ScheduleListItem](
+            items=[_to_schedule_list_item(row) for row in rows],
             total=total if isinstance(total, int) and total >= 0 else len(rows),
             page=filters.page,
-            page_size=filters.page_size,
+            page_size=filters.limit,
         )
 
     def create(
@@ -213,11 +266,44 @@ class ScheduleRepository:
         normalized_type_name = type_name.strip().lower()
         return normalized_type_name or None
 
+    def get_type_id_by_name(self, type_name: str) -> int | None:
+        response = (
+            self._client.table("schedule_types")
+            .select("id")
+            .eq("name", type_name.strip().lower())
+            .execute()
+        )
+        row = _first_row(response.data)
+
+        if row is None:
+            return None
+
+        try:
+            return int(row["id"])
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    def get_status_name_by_id(self, status_id: int) -> str | None:
+        response = (
+            self._client.table("schedule_statuses").select("name").eq("id", status_id).execute()
+        )
+        row = _first_row(response.data)
+
+        if row is None:
+            return None
+
+        status_name = row.get("name")
+        if not isinstance(status_name, str):
+            return None
+
+        normalized_status_name = status_name.strip().lower()
+        return normalized_status_name or None
+
     def list_by_student(
         self,
         student_id: UUID | str,
         filters: ScheduleListFilters,
-    ) -> PaginatedResult[Schedule]:
+    ) -> PaginatedResult[ScheduleListItem]:
         return self._list_with_filters(
             filters=filters,
             scope_column="student_id",
@@ -228,14 +314,40 @@ class ScheduleRepository:
         self,
         adviser_id: UUID | str,
         filters: ScheduleListFilters,
-    ) -> PaginatedResult[Schedule]:
+    ) -> PaginatedResult[ScheduleListItem]:
         return self._list_with_filters(
             filters=filters,
             scope_column="adviser_id",
             scope_value=adviser_id,
         )
 
-    def list_all(self, filters: ScheduleListFilters) -> PaginatedResult[Schedule]:
+    def list_by_adviser_or_panelist(
+        self,
+        adviser_id: UUID | str,
+        panelist_schedule_ids: list[UUID],
+        filters: ScheduleListFilters,
+    ) -> PaginatedResult[ScheduleListItem]:
+        query = self._build_list_query(filters=filters)
+        adviser_id_as_str = str(adviser_id)
+
+        if panelist_schedule_ids:
+            schedule_ids = ",".join(str(schedule_id) for schedule_id in panelist_schedule_ids)
+            query = query.or_(f"adviser_id.eq.{adviser_id_as_str},id.in.({schedule_ids})")
+        else:
+            query = query.eq("adviser_id", adviser_id_as_str)
+
+        response = query.execute()
+        rows = _rows(response.data)
+        total = getattr(response, "count", None)
+
+        return PaginatedResult[ScheduleListItem](
+            items=[_to_schedule_list_item(row) for row in rows],
+            total=total if isinstance(total, int) and total >= 0 else len(rows),
+            page=filters.page,
+            page_size=filters.limit,
+        )
+
+    def list_all(self, filters: ScheduleListFilters) -> PaginatedResult[ScheduleListItem]:
         return self._list_with_filters(filters=filters)
 
     def adviser_has_schedule_conflict(

@@ -12,6 +12,10 @@ from model.schedule import (
     ScheduleRescheduleRequest,
 )
 from repository.audit_repository import AuditRepository, get_audit_repository
+from repository.availability_repository import (
+    AvailabilityRepository,
+    get_availability_repository,
+)
 from repository.notification_repository import (
     NotificationRepository,
     get_notification_repository,
@@ -23,6 +27,7 @@ from usecase.calendar_service import (
     CalendarServiceError,
     GoogleCalendarScheduleService,
 )
+from usecase.schedule_slot_guard import ScheduleSlotGuard
 from usecase.schedules import (
     ScheduleConflictError,
     ScheduleForbiddenError,
@@ -50,11 +55,13 @@ class DefaultScheduleStatusService(ScheduleStatusService):
     def __init__(
         self,
         schedule_repository: ScheduleRepository | None = None,
+        availability_repository: AvailabilityRepository | None = None,
         notification_repository: NotificationRepository | None = None,
         audit_repository: AuditRepository | None = None,
         calendar_service: CalendarService | None = None,
     ) -> None:
         self._schedule_repository = schedule_repository
+        self._availability_repository = availability_repository
         self._notification_repository = notification_repository
         self._audit_repository = audit_repository
         self._calendar_service = calendar_service
@@ -80,6 +87,16 @@ class DefaultScheduleStatusService(ScheduleStatusService):
         return self._notification_repository
 
     @property
+    def availability_repository(self) -> AvailabilityRepository:
+        if self._availability_repository is None:
+            try:
+                self._availability_repository = get_availability_repository()
+            except SupabaseClientConfigurationError as exc:
+                raise ScheduleServiceUnavailableError(str(exc)) from exc
+
+        return self._availability_repository
+
+    @property
     def audit_repository(self) -> AuditRepository:
         if self._audit_repository is None:
             try:
@@ -95,6 +112,10 @@ class DefaultScheduleStatusService(ScheduleStatusService):
             self._calendar_service = GoogleCalendarScheduleService(self.schedule_repository)
 
         return self._calendar_service
+
+    @property
+    def slot_guard(self) -> ScheduleSlotGuard:
+        return ScheduleSlotGuard(self.schedule_repository, self.availability_repository)
 
     def _get_required_status_id(self, status_name: str) -> int:
         status_id = self.schedule_repository.get_status_id_by_name(status_name)
@@ -262,7 +283,6 @@ class DefaultScheduleStatusService(ScheduleStatusService):
         rejected_status_id = self._get_required_status_id(REJECTED_STATUS_NAME)
         completed_status_id = self._get_required_status_id(COMPLETED_STATUS_NAME)
         cancelled_status_id = self._get_required_status_id(CANCELLED_STATUS_NAME)
-        approved_status_id = self._get_required_status_id(APPROVED_STATUS_NAME)
         rescheduled_status_id = self._get_required_status_id(RESCHEDULED_STATUS_NAME)
 
         normalized_new_time = (
@@ -279,14 +299,11 @@ class DefaultScheduleStatusService(ScheduleStatusService):
                 "Rejected, completed, or cancelled schedules cannot be rescheduled."
             )
 
-        has_conflict = self.schedule_repository.adviser_has_schedule_conflict(
+        self.slot_guard.ensure_slot_available(
             adviser_id=schedule.adviser_id,
             scheduled_at=normalized_new_time,
             excluded_schedule_id=schedule.id,
-            status_ids=[approved_status_id, rescheduled_status_id],
         )
-        if has_conflict:
-            raise ScheduleConflictError("The adviser is already booked at the requested time.")
 
         updated_schedule = self.schedule_repository.update_status(
             schedule.id,
