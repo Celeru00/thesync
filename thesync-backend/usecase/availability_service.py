@@ -23,7 +23,6 @@ from usecase.availability import (
     AvailabilityNotFoundError,
     AvailabilityService,
     AvailabilityServiceUnavailableError,
-    AvailabilityValidationError,
 )
 
 ADVISER_ROLE_NAME: Final[str] = "adviser"
@@ -94,7 +93,7 @@ class DefaultAvailabilityService(AvailabilityService):
             raise AvailabilityNotFoundError("Adviser was not found.")
 
         if adviser.role_name is None or adviser.role_name.lower() != ADVISER_ROLE_NAME:
-            raise AvailabilityValidationError("Selected user is not an adviser.")
+            raise AvailabilityNotFoundError("Adviser was not found.")
 
     def _ensure_no_overlap(
         self,

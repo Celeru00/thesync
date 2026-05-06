@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -8,6 +8,7 @@ from model.availability import AvailabilitySlot
 from repository.supabase_client import get_supabase_admin_client
 
 AVAILABILITY_SELECT = "id, adviser_id, slot_start, slot_end, is_blocked"
+DEFAULT_SCHEDULE_DURATION = timedelta(hours=1)
 
 
 class AvailabilityRepositoryNotFoundError(LookupError):
@@ -172,8 +173,8 @@ class AvailabilityRepository:
         day_bounds = _normalize_day_bounds(day)
         if day_bounds is not None:
             day_start, day_end = day_bounds
-            availability_query = availability_query.gte("slot_start", day_start.isoformat()).lte(
-                "slot_start", day_end.isoformat()
+            availability_query = availability_query.lt("slot_start", day_end.isoformat()).gt(
+                "slot_end", day_start.isoformat()
             )
 
         availability_response = availability_query.execute()
@@ -192,8 +193,12 @@ class AvailabilityRepository:
 
         if day_bounds is not None:
             day_start, day_end = day_bounds
-            schedule_query = schedule_query.gte("scheduled_at", day_start.isoformat()).lte(
-                "scheduled_at", day_end.isoformat()
+            schedule_query = schedule_query.gte(
+                "scheduled_at",
+                (day_start - DEFAULT_SCHEDULE_DURATION).isoformat(),
+            ).lte(
+                "scheduled_at",
+                day_end.isoformat(),
             )
 
         schedule_response = schedule_query.execute()
@@ -206,7 +211,8 @@ class AvailabilityRepository:
         free_slots: list[AvailabilitySlot] = []
         for slot in slots:
             has_overlap = any(
-                slot.slot_start <= scheduled_at < slot.slot_end
+                scheduled_at < slot.slot_end
+                and scheduled_at + DEFAULT_SCHEDULE_DURATION > slot.slot_start
                 for scheduled_at in approved_schedule_times
             )
             if not has_overlap:
