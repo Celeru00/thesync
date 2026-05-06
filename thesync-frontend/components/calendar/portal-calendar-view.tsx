@@ -78,13 +78,8 @@ type DragSelection = {
 };
 
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const weekTimeSlots = Array.from({ length: 24 }, (_, index) => {
-  const totalMinutes = 8 * 60 + index * 30;
-  const hour = Math.floor(totalMinutes / 60);
-  const minute = totalMinutes % 60;
-
-  return { hour, minute };
-});
+const DEFAULT_WEEK_START_MINUTES = 8 * 60;
+const DEFAULT_WEEK_END_MINUTES = 20 * 60;
 
 const monthFormatter = new Intl.DateTimeFormat("en-US", {
   month: "long",
@@ -192,6 +187,28 @@ function addMinutes(date: Date, amount: number) {
   return new Date(date.getTime() + amount * 60 * 1000);
 }
 
+function buildWeekTimeSlots(startMinutes: number, endMinutes: number) {
+  const totalSlots = Math.max(1, Math.ceil((endMinutes - startMinutes) / 30));
+
+  return Array.from({ length: totalSlots }, (_, index) => {
+    const totalMinutes = startMinutes + index * 30;
+    const hour = Math.floor(totalMinutes / 60);
+    const minute = totalMinutes % 60;
+
+    return { hour, minute };
+  });
+}
+
+function parsePortalEventDate(value: string) {
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+}
+
 function startOfWeek(date: Date) {
   return addDays(startOfDay(date), -startOfDay(date).getDay());
 }
@@ -242,6 +259,24 @@ function getEventDayKey(date: Date) {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
+function getInitialFocusDate(events: PortalCalendarEvent[]) {
+  const today = startOfDay(new Date());
+  const sortedEventDates = events
+    .map((event) => parsePortalEventDate(event.startsAt))
+    .filter((date): date is Date => date !== null)
+    .sort((left, right) => left.getTime() - right.getTime());
+
+  if (sortedEventDates.length === 0) {
+    return today;
+  }
+
+  const nextUpcomingDate =
+    sortedEventDates.find((date) => date.getTime() >= today.getTime()) ??
+    sortedEventDates[sortedEventDates.length - 1];
+
+  return startOfDay(nextUpcomingDate);
+}
+
 function getTitleForView(view: CalendarView, date: Date) {
   if (view === "month") {
     return monthFormatter.format(date);
@@ -263,14 +298,34 @@ function getWeekEvents(date: Date, events: CalendarEvent[]) {
   });
 }
 
-function getWeekSlotIndex(date: Date) {
-  const slotOffset = date.getHours() * 60 + date.getMinutes() - 8 * 60;
+function getWeekSlotIndex(date: Date, startMinutes: number, slotCount: number) {
+  const slotOffset = date.getHours() * 60 + date.getMinutes() - startMinutes;
 
-  if (slotOffset < 0 || slotOffset >= weekTimeSlots.length * 30) {
+  if (slotOffset < 0 || slotOffset >= slotCount * 30) {
     return -1;
   }
 
   return Math.floor(slotOffset / 30);
+}
+
+function getEventStartMinutes(event: CalendarEvent) {
+  return event.startsAt.getHours() * 60 + event.startsAt.getMinutes();
+}
+
+function getEventEndMinutes(event: CalendarEvent) {
+  return getEventStartMinutes(event) + event.durationHours * 60;
+}
+
+function roundDownToHalfHour(minutes: number) {
+  return Math.floor(minutes / 30) * 30;
+}
+
+function roundUpToHalfHour(minutes: number) {
+  return Math.ceil(minutes / 30) * 30;
+}
+
+function isAllDayEvent(event: CalendarEvent) {
+  return getEventStartMinutes(event) === 0 && event.durationHours >= 23.5;
 }
 
 function buildSlotDate(
@@ -297,14 +352,24 @@ export function PortalCalendarView({
   events?: PortalCalendarEvent[];
 }) {
   const [view, setView] = useState<CalendarView>("month");
-  const [focusDate, setFocusDate] = useState(new Date(2026, 4, 1));
+  const [focusDate, setFocusDate] = useState(() => getInitialFocusDate(events));
   const [requestDraft, setRequestDraft] = useState<RequestDraft | null>(null);
   const calendarEvents = useMemo<CalendarEvent[]>(
     () =>
-      events.map((event) => ({
-        ...event,
-        startsAt: new Date(event.startsAt),
-      })),
+      events
+        .map((event) => {
+          const startsAt = parsePortalEventDate(event.startsAt);
+
+          if (!startsAt) {
+            return null;
+          }
+
+          return {
+            ...event,
+            startsAt,
+          };
+        })
+        .filter((event): event is CalendarEvent => event !== null),
     [events],
   );
 
@@ -606,18 +671,54 @@ function WeekGrid({
     null,
   );
   const dragSelectionRef = useRef<DragSelection | null>(null);
+  const allDayWeekEvents = useMemo(
+    () => weekEvents.filter((event) => isAllDayEvent(event)),
+    [weekEvents],
+  );
+  const timedWeekEvents = useMemo(
+    () => weekEvents.filter((event) => !isAllDayEvent(event)),
+    [weekEvents],
+  );
+  const { displayStartMinutes, weekTimeSlots } = useMemo(() => {
+    const earliestEventMinutes = timedWeekEvents.length
+      ? Math.min(...timedWeekEvents.map((event) => getEventStartMinutes(event)))
+      : DEFAULT_WEEK_START_MINUTES;
+    const latestEventMinutes = timedWeekEvents.length
+      ? Math.max(...timedWeekEvents.map((event) => getEventEndMinutes(event)))
+      : DEFAULT_WEEK_END_MINUTES;
+    const startMinutes = Math.max(
+      0,
+      Math.min(
+        DEFAULT_WEEK_START_MINUTES,
+        roundDownToHalfHour(earliestEventMinutes),
+      ),
+    );
+    const endMinutes = Math.min(
+      24 * 60,
+      Math.max(DEFAULT_WEEK_END_MINUTES, roundUpToHalfHour(latestEventMinutes)),
+    );
+
+    return {
+      displayStartMinutes: startMinutes,
+      weekTimeSlots: buildWeekTimeSlots(startMinutes, endMinutes),
+    };
+  }, [timedWeekEvents]);
   const gridStyle = {
     gridTemplateColumns: "9rem repeat(7, minmax(8.5rem, 1fr))",
-    gridTemplateRows: `3.9rem repeat(${weekTimeSlots.length}, 1.875rem)`,
+    gridTemplateRows: `3.9rem 3.25rem repeat(${weekTimeSlots.length}, 1.875rem)`,
   } as const;
   const occupiedSlots = useMemo(() => {
     const slots = new Set<string>();
 
-    for (const event of weekEvents) {
+    for (const event of timedWeekEvents) {
       const dayIndex = weekDays.findIndex((day) =>
         isSameDay(day, event.startsAt),
       );
-      const startSlotIndex = getWeekSlotIndex(event.startsAt);
+      const startSlotIndex = getWeekSlotIndex(
+        event.startsAt,
+        displayStartMinutes,
+        weekTimeSlots.length,
+      );
 
       if (dayIndex === -1 || startSlotIndex === -1) {
         continue;
@@ -631,7 +732,7 @@ function WeekGrid({
     }
 
     return slots;
-  }, [weekDays, weekEvents]);
+  }, [displayStartMinutes, timedWeekEvents, weekDays, weekTimeSlots.length]);
 
   useEffect(() => {
     dragSelectionRef.current = dragSelection;
@@ -661,7 +762,7 @@ function WeekGrid({
 
     setDragSelection(null);
     onRequestSlotSelect(startAt, endAt);
-  }, [onRequestSlotSelect, weekDays]);
+  }, [onRequestSlotSelect, weekDays, weekTimeSlots]);
 
   useEffect(() => {
     if (!canCreateRequests) {
@@ -742,31 +843,76 @@ function WeekGrid({
             }}
           />
 
+          <div
+            className="flex items-center justify-end border-r border-b border-surface bg-surface-card px-3 text-caption font-medium text-content-muted"
+            style={{
+              gridColumnStart: 1,
+              gridRowStart: 2,
+            }}
+          >
+            All day
+          </div>
+
           {weekDays.map((day, dayIndex) => {
             const isFocusedDay = isSameDay(day, focusDate);
+            const dayAllDayEvents = allDayWeekEvents.filter((event) =>
+              isSameDay(day, event.startsAt),
+            );
 
             return (
-              <div
-                key={day.toISOString()}
-                className={cn(
-                  "flex flex-col items-center justify-center border-r border-b border-surface bg-surface-card px-2 py-2",
-                  isFocusedDay && "bg-primary-tint/55",
-                )}
-                style={{
-                  gridColumnStart: dayIndex + 2,
-                  gridRowStart: 1,
-                }}
-              >
-                <div className="text-caption text-content-muted">
-                  {weekdayLabels[day.getDay()]}
-                </div>
+              <div key={day.toISOString()} className="contents">
                 <div
                   className={cn(
-                    "mt-1 text-[1.75rem] leading-none font-semibold",
-                    isFocusedDay ? "text-brand-strong" : "text-content-strong",
+                    "flex flex-col items-center justify-center border-r border-b border-surface bg-surface-card px-2 py-2",
+                    isFocusedDay && "bg-primary-tint/55",
                   )}
+                  style={{
+                    gridColumnStart: dayIndex + 2,
+                    gridRowStart: 1,
+                  }}
                 >
-                  {day.getDate()}
+                  <div className="text-caption text-content-muted">
+                    {weekdayLabels[day.getDay()]}
+                  </div>
+                  <div
+                    className={cn(
+                      "mt-1 text-[1.75rem] leading-none font-semibold",
+                      isFocusedDay
+                        ? "text-brand-strong"
+                        : "text-content-strong",
+                    )}
+                  >
+                    {day.getDate()}
+                  </div>
+                </div>
+
+                <div
+                  className={cn(
+                    "flex min-h-[3.25rem] flex-col justify-center gap-1 border-r border-b border-surface px-2 py-1.5",
+                    isFocusedDay ? "bg-primary-tint/25" : "bg-surface-card",
+                  )}
+                  style={{
+                    gridColumnStart: dayIndex + 2,
+                    gridRowStart: 2,
+                  }}
+                >
+                  {dayAllDayEvents.length > 0 ? (
+                    dayAllDayEvents.map((event) => (
+                      <div
+                        key={event.id}
+                        className={cn(
+                          "truncate rounded-md px-2 py-1 text-[0.78rem] font-medium",
+                          eventToneClassNames[event.tone].monthBar,
+                        )}
+                      >
+                        {event.title}
+                      </div>
+                    ))
+                  ) : (
+                    <span className="text-[0.75rem] text-content-muted/70">
+                      &nbsp;
+                    </span>
+                  )}
                 </div>
               </div>
             );
@@ -782,7 +928,7 @@ function WeekGrid({
                 )}
                 style={{
                   gridColumnStart: 1,
-                  gridRowStart: slotIndex + 2,
+                  gridRowStart: slotIndex + 3,
                 }}
               >
                 {slot.minute === 0
@@ -825,7 +971,7 @@ function WeekGrid({
                     )}
                     style={{
                       gridColumnStart: dayIndex + 2,
-                      gridRowStart: slotIndex + 2,
+                      gridRowStart: slotIndex + 3,
                     }}
                   />
                 );
@@ -833,11 +979,15 @@ function WeekGrid({
             ];
           })}
 
-          {weekEvents.map((event) => {
+          {timedWeekEvents.map((event) => {
             const dayIndex = weekDays.findIndex((day) =>
               isSameDay(day, event.startsAt),
             );
-            const startRow = getWeekSlotIndex(event.startsAt);
+            const startRow = getWeekSlotIndex(
+              event.startsAt,
+              displayStartMinutes,
+              weekTimeSlots.length,
+            );
 
             if (dayIndex === -1 || startRow === -1) {
               return null;
@@ -852,7 +1002,7 @@ function WeekGrid({
                 )}
                 style={{
                   gridColumnStart: dayIndex + 2,
-                  gridRow: `${startRow + 2} / span ${Math.max(1, event.durationHours * 2)}`,
+                  gridRow: `${startRow + 3} / span ${Math.max(1, event.durationHours * 2)}`,
                 }}
               >
                 <div className="text-[0.98rem] leading-5 font-medium">

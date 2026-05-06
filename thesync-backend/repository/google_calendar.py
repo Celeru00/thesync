@@ -350,22 +350,37 @@ class GoogleCalendarClient:
         time_min: datetime | None = None,
         time_max: datetime | None = None,
     ) -> list[GoogleCalendarRemoteEvent]:
-        query = {
+        base_query = {
             "singleEvents": "true",
             "orderBy": "startTime",
             "maxResults": "250",
         }
         if time_min is not None:
-            query["timeMin"] = time_min.astimezone(UTC).isoformat()
+            base_query["timeMin"] = time_min.astimezone(UTC).isoformat()
         if time_max is not None:
-            query["timeMax"] = time_max.astimezone(UTC).isoformat()
+            base_query["timeMax"] = time_max.astimezone(UTC).isoformat()
 
-        payload = self._request_json("events", query=query)
-        items = payload.get("items")
-        if not isinstance(items, list):
-            raise GoogleCalendarApiError("Google Calendar returned an invalid events payload.")
+        items: list[dict[str, Any]] = []
+        next_page_token: str | None = None
 
-        events = [_build_remote_event(item) for item in items if isinstance(item, dict)]
+        while True:
+            query = dict(base_query)
+            if next_page_token:
+                query["pageToken"] = next_page_token
+
+            payload = self._request_json("events", query=query)
+            page_items = payload.get("items")
+            if not isinstance(page_items, list):
+                raise GoogleCalendarApiError("Google Calendar returned an invalid events payload.")
+
+            items.extend(item for item in page_items if isinstance(item, dict))
+            raw_next_page_token = payload.get("nextPageToken")
+            if not isinstance(raw_next_page_token, str) or not raw_next_page_token.strip():
+                break
+
+            next_page_token = raw_next_page_token.strip()
+
+        events = [_build_remote_event(item) for item in items]
         _debug_log(
             "events_listed",
             user_id=str(self._connection.user_id),
