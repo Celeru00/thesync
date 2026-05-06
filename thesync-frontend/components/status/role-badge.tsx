@@ -5,10 +5,10 @@ const CONFIG: Record<
   UserRole,
   { variant: React.ComponentProps<typeof Badge>["variant"] }
 > = {
-  Student: { variant: "info" },
-  Adviser: { variant: "violet" },
-  Admin: { variant: "default" },
-  Panelist: { variant: "secondary" },
+  student: { variant: "info" },
+  adviser: { variant: "violet" },
+  admin: { variant: "default" },
+  panelist: { variant: "secondary" },
 };
 
 interface RoleBadgeProps {

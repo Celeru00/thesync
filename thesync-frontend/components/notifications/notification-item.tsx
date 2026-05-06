@@ -48,13 +48,18 @@ export function NotificationItem({
   onDelete,
   compact = false,
 }: NotificationItemProps) {
-  const { Icon, bg, color } = getIconConfig(n.type);
+  // Default to 'info' type if not provided
+  const notificationType = n.type || "info";
+  const { Icon, bg, color } = getIconConfig(notificationType);
+  
+  // Extract title from message or use provided title, default to first line
+  const title = n.title || n.message.split("\n")[0] || "Notification";
 
   return (
     <div
       className={cn(
         "transition-colors",
-        !n.read && "bg-info-soft/20",
+        !n.is_read && "bg-info-soft/20",
         compact ? "px-4 py-3" : "px-6 py-4",
       )}
     >
@@ -73,9 +78,9 @@ export function NotificationItem({
         {/* Content */}
         <div className="min-w-0 flex-1">
           <div className="mb-0.5 flex items-start justify-between gap-3">
-            <p className="text-label">{n.title}</p>
+            <p className="text-label">{title}</p>
             <span className="shrink-0 text-caption text-content-muted">
-              {formatRelativeTime(n.timestamp)}
+              {formatRelativeTime(n.created_at)}
             </span>
           </div>
 
@@ -91,7 +96,7 @@ export function NotificationItem({
           {/* Full-mode actions */}
           {!compact && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              {!n.read && onMarkAsRead && (
+              {!n.is_read && onMarkAsRead && (
                 <Button variant="outline" size="sm" onClick={onMarkAsRead}>
                   Mark as Read
                 </Button>
