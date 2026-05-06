@@ -1,3 +1,8 @@
+from repository.audit_repository import (
+    AuditRepository,
+    AuditRepositoryNotFoundError,
+    get_audit_repository,
+)
 from repository.auth import (
     AuthConfigurationError,
     AuthenticationError,
@@ -51,6 +56,8 @@ __all__ = [
     "AuditLogRecord",
     "AuthConfigurationError",
     "AuthenticationError",
+    "AuditRepository",
+    "AuditRepositoryNotFoundError",
     "AvailabilityRepository",
     "AvailabilityRepositoryNotFoundError",
     "AvailabilitySlotRecord",
@@ -58,6 +65,7 @@ __all__ = [
     "decode_supabase_access_token",
     "extract_bearer_token",
     "get_authenticated_user",
+    "get_audit_repository",
     "GoogleCalendarConnectionRecord",
     "InviteStatusRecord",
     "NotificationRepository",
