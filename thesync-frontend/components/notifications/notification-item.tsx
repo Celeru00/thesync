@@ -51,7 +51,7 @@ export function NotificationItem({
   // Default to 'info' type if not provided
   const notificationType = n.type || "info";
   const { Icon, bg, color } = getIconConfig(notificationType);
-  
+
   // Extract title from message or use provided title, default to first line
   const title = n.title || n.message.split("\n")[0] || "Notification";
 
