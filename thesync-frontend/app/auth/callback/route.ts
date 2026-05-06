@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { connectGoogleCalendar } from "@/lib/calendar/backend";
+import { getRequestAppOrigin } from "@/lib/auth/app-url";
 import { BackendAuthError, initializeBackendAuth } from "@/lib/auth/backend";
 import { isAppRole, isSignupRole } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -31,21 +33,36 @@ function getLoginUrl(origin: string, errorCode: string) {
   return loginUrl;
 }
 
+function getCalendarReturnUrl(
+  origin: string,
+  nextPath: string | null,
+  statusCode: string,
+) {
+  const target = new URL(getSafeNextPath(nextPath), origin);
+  target.searchParams.set("calendar", statusCode);
+  return target;
+}
+
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
+  const appOrigin = getRequestAppOrigin(request);
   const code = requestUrl.searchParams.get("code");
   const authError = requestUrl.searchParams.get("error");
   const authErrorCode = requestUrl.searchParams.get("error_code");
   const authErrorDescription = requestUrl.searchParams.get("error_description");
   const flow = requestUrl.searchParams.get("flow");
+  const intent = requestUrl.searchParams.get("intent");
+  const nextPath = requestUrl.searchParams.get("next");
   const requestedRole = requestUrl.searchParams.get("role");
   const isSignupFlow = flow === "signup";
+  const isCalendarConnectIntent = intent === "calendar-connect";
   const requestedSignupRole = isSignupRole(requestedRole)
     ? requestedRole
     : null;
 
   console.log("[frontend-auth] oauth_callback_received", {
     flow,
+    intent,
     requestedRole,
     hasCode: Boolean(code),
     authError,
@@ -60,14 +77,24 @@ export async function GET(request: Request) {
         authErrorDescription,
       });
 
+      if (isCalendarConnectIntent) {
+        return NextResponse.redirect(
+          getCalendarReturnUrl(appOrigin, nextPath, "connect-failed"),
+        );
+      }
+
       return NextResponse.redirect(
-        getLoginUrl(requestUrl.origin, "google-auth-failed"),
+        getLoginUrl(appOrigin, "google-auth-failed"),
       );
     }
 
-    return NextResponse.redirect(
-      getLoginUrl(requestUrl.origin, "missing-code"),
-    );
+    if (isCalendarConnectIntent) {
+      return NextResponse.redirect(
+        getCalendarReturnUrl(appOrigin, nextPath, "missing-code"),
+      );
+    }
+
+    return NextResponse.redirect(getLoginUrl(appOrigin, "missing-code"));
   }
 
   const supabase = await createClient();
@@ -75,9 +102,14 @@ export async function GET(request: Request) {
 
   if (error) {
     console.log("[frontend-auth] oauth_callback_exchange_failed", error);
-    return NextResponse.redirect(
-      getLoginUrl(requestUrl.origin, "google-auth-failed"),
-    );
+
+    if (isCalendarConnectIntent) {
+      return NextResponse.redirect(
+        getCalendarReturnUrl(appOrigin, nextPath, "connect-failed"),
+      );
+    }
+
+    return NextResponse.redirect(getLoginUrl(appOrigin, "google-auth-failed"));
   }
 
   const [
@@ -96,9 +128,52 @@ export async function GET(request: Request) {
       hasUser: Boolean(user),
       hasAccessToken: Boolean(session?.access_token),
     });
-    return NextResponse.redirect(
-      getLoginUrl(requestUrl.origin, "google-auth-failed"),
-    );
+
+    if (isCalendarConnectIntent) {
+      return NextResponse.redirect(
+        getCalendarReturnUrl(appOrigin, nextPath, "connect-failed"),
+      );
+    }
+
+    return NextResponse.redirect(getLoginUrl(appOrigin, "google-auth-failed"));
+  }
+
+  if (isCalendarConnectIntent) {
+    const providerAccessToken = session.provider_token;
+    const providerRefreshToken = session.provider_refresh_token;
+
+    console.log("[frontend-auth] oauth_callback_calendar_connect", {
+      hasProviderAccessToken: Boolean(providerAccessToken),
+      hasProviderRefreshToken: Boolean(providerRefreshToken),
+      nextPath,
+    });
+
+    if (!providerAccessToken || !providerRefreshToken || !user.email) {
+      return NextResponse.redirect(
+        getCalendarReturnUrl(appOrigin, nextPath, "missing-provider-token"),
+      );
+    }
+
+    try {
+      await connectGoogleCalendar(session.access_token, {
+        provider_access_token: providerAccessToken,
+        provider_refresh_token: providerRefreshToken,
+        google_email: user.email,
+        calendar_id: "primary",
+      });
+
+      return NextResponse.redirect(
+        getCalendarReturnUrl(appOrigin, nextPath, "connected"),
+      );
+    } catch (error) {
+      console.log(
+        "[frontend-auth] oauth_callback_calendar_connect_failed",
+        error,
+      );
+      return NextResponse.redirect(
+        getCalendarReturnUrl(appOrigin, nextPath, "connect-failed"),
+      );
+    }
   }
 
   try {
@@ -114,16 +189,13 @@ export async function GET(request: Request) {
         new URL(
           authState.redirect_to ??
             getSafeNextPath(requestUrl.searchParams.get("next")),
-          requestUrl.origin,
+          appOrigin,
         ),
       );
     }
 
     return NextResponse.redirect(
-      getRegisterUrl(
-        requestUrl.origin,
-        authState.register_role ?? requestedSignupRole,
-      ),
+      getRegisterUrl(appOrigin, authState.register_role ?? requestedSignupRole),
     );
   } catch (error) {
     if (error instanceof BackendAuthError) {
@@ -138,10 +210,7 @@ export async function GET(request: Request) {
       }
 
       return NextResponse.redirect(
-        getLoginUrl(
-          requestUrl.origin,
-          error.code ?? "registration-sync-failed",
-        ),
+        getLoginUrl(appOrigin, error.code ?? "registration-sync-failed"),
       );
     }
 

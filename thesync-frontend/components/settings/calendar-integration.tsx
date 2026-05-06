@@ -1,15 +1,28 @@
 import { CalendarDays } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import type { GoogleCalendarConnectionStatus } from "@/lib/calendar/backend";
+import { GoogleCalendarConnectButton } from "@/components/calendar/google-calendar-connect-button";
+import { GoogleCalendarDisconnectButton } from "@/components/calendar/google-calendar-disconnect-button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { SettingsSection } from "@/components/settings/settings-section";
 
 type CalendarIntegrationProps = {
   email: string;
+  connection: GoogleCalendarConnectionStatus;
+  nextPath: string;
+  statusMessage?: string | null;
 };
 
-export function CalendarIntegration({ email }: CalendarIntegrationProps) {
+export function CalendarIntegration({
+  email,
+  connection,
+  nextPath,
+  statusMessage,
+}: CalendarIntegrationProps) {
+  const isConnected = connection.connected;
+  const connectedEmail = connection.google_email ?? email;
+
   return (
     <SettingsSection
       title="Calendar Integration"
@@ -17,19 +30,50 @@ export function CalendarIntegration({ email }: CalendarIntegrationProps) {
       icon={CalendarDays}
     >
       <div className="space-y-4">
-        <div className="flex flex-col gap-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+        {statusMessage ? (
+          <div className="rounded-lg border border-brand-subtle bg-primary-tint/40 px-4 py-3 text-body-sm text-content-strong">
+            {statusMessage}
+          </div>
+        ) : null}
+
+        <div
+          className={`flex flex-col gap-4 rounded-lg p-4 sm:flex-row sm:items-center sm:justify-between ${
+            isConnected
+              ? "border border-emerald-200 bg-emerald-50"
+              : "border border-brand-subtle bg-surface-card"
+          }`}
+        >
           <div className="flex items-center gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-success-soft text-success">
+            <div
+              className={`flex size-10 shrink-0 items-center justify-center rounded-full ${
+                isConnected
+                  ? "bg-success-soft text-success"
+                  : "bg-primary-tint text-brand"
+              }`}
+            >
               <CalendarDays className="size-5" />
             </div>
             <div>
-              <p className="text-label">Connected to Google Calendar</p>
-              <p className="text-body-sm text-content-muted">{email}</p>
+              <p className="text-label">
+                {isConnected
+                  ? "Connected to Google Calendar"
+                  : "Connect your Google Calendar"}
+              </p>
+              <p className="text-body-sm text-content-muted">
+                {isConnected
+                  ? connectedEmail
+                  : "Connect your Google account to view and sync your personal calendar."}
+              </p>
             </div>
           </div>
-          <Button type="button" variant="outline" className="rounded-lg">
-            Disconnect
-          </Button>
+          {isConnected ? (
+            <GoogleCalendarDisconnectButton className="rounded-lg" />
+          ) : (
+            <GoogleCalendarConnectButton
+              nextPath={nextPath}
+              className="rounded-lg"
+            />
+          )}
         </div>
 
         <div className="divide-y divide-border">
@@ -40,7 +84,7 @@ export function CalendarIntegration({ email }: CalendarIntegrationProps) {
                 Automatically add approved consultations to your calendar
               </p>
             </div>
-            <Switch id="auto-sync" defaultChecked />
+            <Switch id="auto-sync" defaultChecked disabled={!isConnected} />
           </div>
 
           <div className="flex items-center justify-between gap-4 py-4">
@@ -50,7 +94,7 @@ export function CalendarIntegration({ email }: CalendarIntegrationProps) {
                 Generate meeting links for online consultations
               </p>
             </div>
-            <Switch id="meet-links" defaultChecked />
+            <Switch id="meet-links" defaultChecked disabled={!isConnected} />
           </div>
         </div>
       </div>

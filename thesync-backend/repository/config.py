@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     supabase_jwt_audience: str = "authenticated"
     supabase_jwt_secret: str | None = None
     supabase_jwt_leeway_seconds: int = 60
+    google_oauth_client_id: str | None = None
+    google_oauth_client_secret: str | None = None
+    google_oauth_token_uri: str = "https://oauth2.googleapis.com/token"
+    google_calendar_scope: str = "https://www.googleapis.com/auth/calendar"
 
     model_config = SettingsConfigDict(
         env_file=".env",

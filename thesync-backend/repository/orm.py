@@ -139,6 +139,10 @@ class UserRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         back_populates="changed_by_user",
         foreign_keys="AuditLogRecord.changed_by",
     )
+    google_calendar_connection: Mapped[GoogleCalendarConnectionRecord | None] = relationship(
+        back_populates="user",
+        uselist=False,
+    )
 
 
 class ScheduleRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
@@ -293,3 +297,39 @@ class AuditLogRecord(UUIDPrimaryKeyMixin, Base):
         back_populates="new_audit_logs",
         foreign_keys=[new_status_id],
     )
+
+
+class GoogleCalendarConnectionRecord(Base):
+    __tablename__: ClassVar[str] = "google_calendar_connections"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_google_calendar_connections_user_id"),)
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    google_email: Mapped[str] = mapped_column(Text, nullable=False)
+    calendar_id: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="primary",
+        server_default=text("'primary'"),
+    )
+    access_token: Mapped[str] = mapped_column(Text, nullable=False)
+    refresh_token: Mapped[str] = mapped_column(Text, nullable=False)
+    token_type: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scopes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    token_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    connected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    user: Mapped[UserRecord] = relationship(back_populates="google_calendar_connection")
