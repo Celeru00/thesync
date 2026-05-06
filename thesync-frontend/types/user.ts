@@ -9,4 +9,4 @@ export interface User {
 }
 
 /** Expanded user response returned by API-facing models */
-export interface UserResponse extends User {}
+export type UserResponse = User;

@@ -21,7 +21,7 @@ export interface Notification {
 }
 
 /** Notification response shape returned by the API */
-export interface NotificationResponse extends Notification {}
+export type NotificationResponse = Notification;
 
 /** Paginated notification response including unread totals */
 export interface NotificationListResponse {
