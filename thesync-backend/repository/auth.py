@@ -6,6 +6,7 @@ from uuid import UUID
 import jwt
 from jwt import PyJWKClient
 from jwt.exceptions import InvalidTokenError, PyJWKClientError
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
@@ -28,6 +29,11 @@ ROLE_ID_BY_APP_ROLE: dict[AppRole, int] = {
     "adviser": 2,
     "admin": 3,
 }
+
+
+def _debug_log(event: str, **fields: object) -> None:
+    payload = " ".join(f"{key}={value!r}" for key, value in fields.items())
+    print(f"[backend-auth] {event} {payload}".strip(), flush=True)
 
 
 class AuthConfigurationError(RuntimeError):
@@ -80,39 +86,59 @@ def decode_supabase_access_token(access_token: str) -> SupabaseClaims:
     try:
         token_header = jwt.get_unverified_header(access_token)
     except InvalidTokenError as exc:
+        _debug_log("token_header_invalid", reason=repr(exc))
         raise AuthenticationError("Invalid or expired Supabase access token.") from exc
 
     algorithm = str(token_header.get("alg", "")).upper()
+    _debug_log(
+        "token_decode_start",
+        algorithm=algorithm,
+        has_supabase_url=bool(supabase_url),
+        has_jwt_secret=bool(settings.supabase_jwt_secret),
+        audience=settings.supabase_jwt_audience,
+    )
     decode_kwargs = {
         "audience": settings.supabase_jwt_audience,
+        "leeway": settings.supabase_jwt_leeway_seconds,
         "options": {"require": ["sub", "exp", "iat"]},
     }
 
     try:
         if algorithm.startswith("HS"):
             if not settings.supabase_jwt_secret:
+                _debug_log("token_decode_missing_hs_secret")
                 raise AuthConfigurationError(
                     "SUPABASE_JWT_SECRET is required because this Supabase project "
                     "is using a legacy symmetric signing key."
                 )
 
+            _debug_log("token_decode_using_hs_secret", algorithm=algorithm)
             decode_kwargs["algorithms"] = [algorithm]
             payload = jwt.decode(access_token, settings.supabase_jwt_secret, **decode_kwargs)
         else:
             if not supabase_url:
+                _debug_log("token_decode_missing_supabase_url", algorithm=algorithm)
                 raise AuthConfigurationError(
                     "SUPABASE_URL is required for JWT verification when "
                     "asymmetric signing keys are in use."
                 )
 
+            _debug_log("token_decode_using_jwks", algorithm=algorithm, supabase_url=supabase_url)
             decode_kwargs["algorithms"] = ["RS256", "ES256"]
             decode_kwargs["issuer"] = f"{supabase_url}/auth/v1"
             signing_key = get_jwks_client().get_signing_key_from_jwt(access_token)
             payload = jwt.decode(access_token, signing_key.key, **decode_kwargs)
     except (InvalidTokenError, PyJWKClientError) as exc:
+        _debug_log("token_decode_failed", algorithm=algorithm, reason=repr(exc))
         raise AuthenticationError("Invalid or expired Supabase access token.") from exc
 
-    claims = SupabaseClaims.model_validate(payload)
+    try:
+        claims = SupabaseClaims.model_validate(payload)
+    except ValidationError as exc:
+        _debug_log("token_claims_invalid", reason=repr(exc))
+        raise AuthenticationError("Invalid or expired Supabase access token.") from exc
+
+    _debug_log("token_decode_success", user_id=str(claims.sub), role=claims.role)
 
     if claims.role != settings.supabase_jwt_audience:
         raise AuthenticationError("Only authenticated user access tokens are accepted.")

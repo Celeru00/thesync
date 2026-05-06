@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import EmailStr, Field, PositiveInt
+from pydantic import ConfigDict, EmailStr, Field, PositiveInt
 
 from model.base import DomainModel, NonEmptyText
 from model.user import User
@@ -27,6 +27,8 @@ def normalize_app_role_name(value: str) -> AppRole | None:
 
 class SupabaseClaims(DomainModel):
     """Verified claims extracted from a Supabase access token."""
+
+    model_config = ConfigDict(extra="allow")
 
     iss: str
     aud: str | list[str]

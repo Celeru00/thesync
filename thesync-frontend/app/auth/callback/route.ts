@@ -34,6 +34,9 @@ function getLoginUrl(origin: string, errorCode: string) {
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
+  const authError = requestUrl.searchParams.get("error");
+  const authErrorCode = requestUrl.searchParams.get("error_code");
+  const authErrorDescription = requestUrl.searchParams.get("error_description");
   const flow = requestUrl.searchParams.get("flow");
   const requestedRole = requestUrl.searchParams.get("role");
   const isSignupFlow = flow === "signup";
@@ -41,7 +44,27 @@ export async function GET(request: Request) {
     ? requestedRole
     : null;
 
+  console.log("[frontend-auth] oauth_callback_received", {
+    flow,
+    requestedRole,
+    hasCode: Boolean(code),
+    authError,
+    authErrorCode,
+  });
+
   if (!code) {
+    if (authError || authErrorCode) {
+      console.log("[frontend-auth] oauth_callback_provider_error", {
+        authError,
+        authErrorCode,
+        authErrorDescription,
+      });
+
+      return NextResponse.redirect(
+        getLoginUrl(requestUrl.origin, "google-auth-failed"),
+      );
+    }
+
     return NextResponse.redirect(
       getLoginUrl(requestUrl.origin, "missing-code"),
     );
@@ -51,6 +74,7 @@ export async function GET(request: Request) {
   const { error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error) {
+    console.log("[frontend-auth] oauth_callback_exchange_failed", error);
     return NextResponse.redirect(
       getLoginUrl(requestUrl.origin, "google-auth-failed"),
     );
@@ -67,6 +91,11 @@ export async function GET(request: Request) {
   ] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
 
   if (userError || !user || !session?.access_token) {
+    console.log("[frontend-auth] oauth_callback_missing_session", {
+      userError,
+      hasUser: Boolean(user),
+      hasAccessToken: Boolean(session?.access_token),
+    });
     return NextResponse.redirect(
       getLoginUrl(requestUrl.origin, "google-auth-failed"),
     );
@@ -77,6 +106,8 @@ export async function GET(request: Request) {
       flow: isSignupFlow ? "signup" : "login",
       requested_role: isAppRole(requestedRole) ? requestedRole : null,
     });
+
+    console.log("[frontend-auth] oauth_callback_backend_result", authState);
 
     if (authState.action === "redirect") {
       return NextResponse.redirect(
@@ -96,6 +127,12 @@ export async function GET(request: Request) {
     );
   } catch (error) {
     if (error instanceof BackendAuthError) {
+      console.log("[frontend-auth] oauth_callback_backend_failed", {
+        code: error.code,
+        status: error.status,
+        message: error.message,
+      });
+
       if (error.code === "admin-not-provisioned") {
         await supabase.auth.signOut();
       }
