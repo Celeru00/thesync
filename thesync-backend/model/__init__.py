@@ -34,6 +34,8 @@ from model.schedule import (
     ScheduleApproveRequest,
     ScheduleCreateRequest,
     ScheduleListFilters,
+    ScheduleListItem,
+    ScheduleListResponse,
     ScheduleRejectRequest,
     ScheduleRescheduleRequest,
 )
@@ -74,6 +76,8 @@ __all__ = [
     "ScheduleApproveRequest",
     "ScheduleCreateRequest",
     "ScheduleListFilters",
+    "ScheduleListItem",
+    "ScheduleListResponse",
     "ScheduleRejectRequest",
     "ScheduleRescheduleRequest",
     "ScheduleStatus",

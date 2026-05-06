@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import PositiveInt, field_validator, model_validator
+from pydantic import Field, NonNegativeInt, PositiveInt, field_validator, model_validator
 
 from model.base import DomainModel, NonEmptyText, normalize_optional_text
 
@@ -39,12 +39,37 @@ class Schedule(DomainModel):
 class ScheduleListFilters(DomainModel):
     """Filters and pagination for schedule list queries."""
 
+    status_name: str | None = Field(default=None, alias="status")
+    type_name: str | None = Field(default=None, alias="type")
     status_id: PositiveInt | None = None
     type_id: PositiveInt | None = None
-    from_date: date | datetime | None = None
-    to_date: date | datetime | None = None
+    from_date: date | datetime | None = Field(default=None, alias="from")
+    to_date: date | datetime | None = Field(default=None, alias="to")
     page: PositiveInt = 1
-    page_size: PositiveInt = 20
+    limit: PositiveInt = 20
+
+    @field_validator("status_name", "type_name", mode="before")
+    @classmethod
+    def normalize_optional_filters(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
+
+
+class ScheduleListItem(Schedule):
+    """Expanded schedule row returned by list endpoints."""
+
+    student_full_name: NonEmptyText
+    adviser_full_name: NonEmptyText
+    type_name: NonEmptyText
+    status_name: NonEmptyText
+
+
+class ScheduleListResponse(DomainModel):
+    """Paginated schedule list response."""
+
+    items: list[ScheduleListItem]
+    total: NonNegativeInt
+    page: PositiveInt
+    limit: PositiveInt
 
 
 class ScheduleCreateRequest(DomainModel):
@@ -53,7 +78,7 @@ class ScheduleCreateRequest(DomainModel):
     adviser_id: UUID
     type_id: PositiveInt
     topic: NonEmptyText
-    scheduled_at: datetime | None = None
+    scheduled_at: datetime
 
 
 class ScheduleApproveRequest(DomainModel):

@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Literal, Protocol, cast
 from uuid import UUID
 
 from model.auth import AuthenticatedUser
-from model.base import PaginatedResult
 from model.schedule import (
     Schedule,
     ScheduleApproveRequest,
     ScheduleCreateRequest,
     ScheduleListFilters,
+    ScheduleListResponse,
     ScheduleRejectRequest,
     ScheduleRescheduleRequest,
 )
+
+ScheduleConflictReason = Literal["slot_unavailable", "slot_blocked"]
 
 
 class ScheduleServiceError(RuntimeError):
@@ -34,6 +36,19 @@ class ScheduleNotFoundError(ScheduleServiceError):
 class ScheduleConflictError(ScheduleServiceError):
     """Raised when the schedule operation conflicts with existing state."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        reason: ScheduleConflictReason | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+    @property
+    def conflict_reason(self) -> ScheduleConflictReason | None:
+        return cast(ScheduleConflictReason | None, self.reason)
+
 
 class ScheduleServiceUnavailableError(ScheduleServiceError):
     """Raised when the schedule service dependency is not configured."""
@@ -52,7 +67,7 @@ class ScheduleService(Protocol):
         self,
         current_user: AuthenticatedUser,
         filters: ScheduleListFilters,
-    ) -> PaginatedResult[Schedule]: ...
+    ) -> ScheduleListResponse: ...
 
     def get_schedule(
         self,
