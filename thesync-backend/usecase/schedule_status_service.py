@@ -17,6 +17,7 @@ from repository.notification_repository import (
     get_notification_repository,
 )
 from repository.schedule_repository import ScheduleRepository, get_schedule_repository
+from repository.supabase_client import SupabaseClientConfigurationError
 from usecase.calendar_service import (
     CalendarService,
     CalendarServiceError,
@@ -53,15 +54,50 @@ class DefaultScheduleStatusService(ScheduleStatusService):
         audit_repository: AuditRepository | None = None,
         calendar_service: CalendarService | None = None,
     ) -> None:
-        self._schedule_repository = schedule_repository or get_schedule_repository()
-        self._notification_repository = notification_repository or get_notification_repository()
-        self._audit_repository = audit_repository or get_audit_repository()
-        self._calendar_service = calendar_service or GoogleCalendarScheduleService(
-            self._schedule_repository
-        )
+        self._schedule_repository = schedule_repository
+        self._notification_repository = notification_repository
+        self._audit_repository = audit_repository
+        self._calendar_service = calendar_service
+
+    @property
+    def schedule_repository(self) -> ScheduleRepository:
+        if self._schedule_repository is None:
+            try:
+                self._schedule_repository = get_schedule_repository()
+            except SupabaseClientConfigurationError as exc:
+                raise ScheduleServiceUnavailableError(str(exc)) from exc
+
+        return self._schedule_repository
+
+    @property
+    def notification_repository(self) -> NotificationRepository:
+        if self._notification_repository is None:
+            try:
+                self._notification_repository = get_notification_repository()
+            except SupabaseClientConfigurationError as exc:
+                raise ScheduleServiceUnavailableError(str(exc)) from exc
+
+        return self._notification_repository
+
+    @property
+    def audit_repository(self) -> AuditRepository:
+        if self._audit_repository is None:
+            try:
+                self._audit_repository = get_audit_repository()
+            except SupabaseClientConfigurationError as exc:
+                raise ScheduleServiceUnavailableError(str(exc)) from exc
+
+        return self._audit_repository
+
+    @property
+    def calendar_service(self) -> CalendarService:
+        if self._calendar_service is None:
+            self._calendar_service = GoogleCalendarScheduleService(self.schedule_repository)
+
+        return self._calendar_service
 
     def _get_required_status_id(self, status_name: str) -> int:
-        status_id = self._schedule_repository.get_status_id_by_name(status_name)
+        status_id = self.schedule_repository.get_status_id_by_name(status_name)
         if status_id is None:
             raise ScheduleServiceUnavailableError(
                 f'Required schedule status "{status_name}" is missing.'
@@ -74,7 +110,7 @@ class DefaultScheduleStatusService(ScheduleStatusService):
         current_user: AuthenticatedUser,
         schedule_id: UUID,
     ) -> Schedule:
-        schedule = self._schedule_repository.get_by_id(schedule_id)
+        schedule = self.schedule_repository.get_by_id(schedule_id)
         if schedule is None:
             raise ScheduleNotFoundError("Schedule was not found.")
 
@@ -92,7 +128,7 @@ class DefaultScheduleStatusService(ScheduleStatusService):
         new_status_id: int,
         remarks: str | None = None,
     ) -> None:
-        self._audit_repository.create(
+        self.audit_repository.create(
             schedule_id=schedule.id,
             changed_by=changed_by,
             previous_status_id=previous_status_id,
@@ -107,7 +143,7 @@ class DefaultScheduleStatusService(ScheduleStatusService):
         schedule_id: UUID,
         message: str,
     ) -> None:
-        self._notification_repository.create(
+        self.notification_repository.create(
             user_id=user_id,
             schedule_id=schedule_id,
             message=message,
@@ -139,7 +175,7 @@ class DefaultScheduleStatusService(ScheduleStatusService):
                 "A scheduled time is required before approving a schedule."
             )
 
-        updated_schedule = self._schedule_repository.update_status(
+        updated_schedule = self.schedule_repository.update_status(
             schedule.id,
             approved_status_id,
             effective_scheduled_at,
@@ -169,7 +205,7 @@ class DefaultScheduleStatusService(ScheduleStatusService):
         )
 
         try:
-            return self._calendar_service.sync(updated_schedule)
+            return self.calendar_service.sync(updated_schedule)
         except CalendarServiceError:
             return updated_schedule
 
@@ -192,7 +228,7 @@ class DefaultScheduleStatusService(ScheduleStatusService):
         if schedule.status_id == completed_status_id:
             raise ScheduleConflictError("Completed schedules cannot be rejected.")
 
-        updated_schedule = self._schedule_repository.update_status(
+        updated_schedule = self.schedule_repository.update_status(
             schedule.id,
             rejected_status_id,
         )
@@ -243,7 +279,7 @@ class DefaultScheduleStatusService(ScheduleStatusService):
                 "Rejected, completed, or cancelled schedules cannot be rescheduled."
             )
 
-        has_conflict = self._schedule_repository.adviser_has_schedule_conflict(
+        has_conflict = self.schedule_repository.adviser_has_schedule_conflict(
             adviser_id=schedule.adviser_id,
             scheduled_at=normalized_new_time,
             excluded_schedule_id=schedule.id,
@@ -252,7 +288,7 @@ class DefaultScheduleStatusService(ScheduleStatusService):
         if has_conflict:
             raise ScheduleConflictError("The adviser is already booked at the requested time.")
 
-        updated_schedule = self._schedule_repository.update_status(
+        updated_schedule = self.schedule_repository.update_status(
             schedule.id,
             rescheduled_status_id,
             normalized_new_time,
