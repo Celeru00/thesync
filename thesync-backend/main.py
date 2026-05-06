@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from controller.availability import router as availability_router
 from controller.auth import router as auth_router
+from controller.availability import router as availability_router
 from controller.calendar import router as calendar_router
 from controller.dashboard import router as dashboard_router
 from controller.middleware import SupabaseAuthMiddleware
