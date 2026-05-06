@@ -33,37 +33,24 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useApproveSchedule,
-  useCancelSchedule,
   useRejectSchedule,
   useRescheduleSchedule,
   useSchedules,
 } from "@/hooks/useSchedules";
 import type { ScheduleListItem } from "@/lib/api";
-import { type ConsultationRequestStatus } from "@/lib/mock/student-consultations";
 import { cn } from "@/lib/utils";
 
-const statusOptions: Array<{
-  label: string;
-  value: ConsultationRequestStatus | "all";
-}> = [
-  { label: "All Status", value: "all" },
-  { label: "Approved", value: "approved" },
-  { label: "Pending", value: "pending" },
-  { label: "Completed", value: "completed" },
-  { label: "Rejected", value: "rejected" },
-  { label: "Cancelled", value: "cancelled" },
-];
+type ScheduleQueueStatus =
+  | "approved"
+  | "pending"
+  | "rescheduled"
+  | "completed"
+  | "rejected"
+  | "cancelled";
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
   month: "long",
@@ -72,26 +59,28 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
 });
 
 export default function AdviserConsultationsPage() {
-  const [statusFilter, setStatusFilter] = useState<
-    ConsultationRequestStatus | "all"
-  >("all");
   const [searchTerm, setSearchTerm] = useState("");
-  const { data, error, isLoading } = useSchedules(
-    statusFilter === "all" ? undefined : { status: statusFilter },
-  );
+  const { data, error, isLoading } = useSchedules({ status: "pending" });
   const approveScheduleMutation = useApproveSchedule();
-  const cancelScheduleMutation = useCancelSchedule();
   const rejectScheduleMutation = useRejectSchedule();
   const rescheduleScheduleMutation = useRescheduleSchedule();
+  const [optimisticStatuses, setOptimisticStatuses] = useState<
+    Record<string, ScheduleQueueStatus>
+  >({});
+  const [actionError, setActionError] = useState<{
+    id: string;
+    message: string;
+  } | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<ScheduleListItem | null>(
+    null,
+  );
+  const [rejectRemarks, setRejectRemarks] = useState("");
+  const [rejectError, setRejectError] = useState<string | null>(null);
   const [rescheduleTarget, setRescheduleTarget] =
     useState<ScheduleListItem | null>(null);
   const [rescheduleAt, setRescheduleAt] = useState("");
   const [rescheduleRemarks, setRescheduleRemarks] = useState("");
   const [rescheduleError, setRescheduleError] = useState<string | null>(null);
-  const [cancelTarget, setCancelTarget] = useState<ScheduleListItem | null>(
-    null,
-  );
-  const [cancelError, setCancelError] = useState<string | null>(null);
 
   const filteredRequests = useMemo(() => {
     const requests = data?.items ?? [];
@@ -114,17 +103,101 @@ export default function AdviserConsultationsPage() {
     );
   }, [data?.items, searchTerm]);
 
+  async function handleApprove(request: ScheduleListItem) {
+    setActionError(null);
+    setOptimisticStatuses((current) => ({
+      ...current,
+      [request.id]: "approved",
+    }));
+
+    try {
+      await approveScheduleMutation.mutateAsync(request.id);
+    } catch (error) {
+      setOptimisticStatuses((current) => removeKey(current, request.id));
+      setActionError({
+        id: request.id,
+        message:
+          error instanceof Error
+            ? error.message
+            : "We couldn't approve this request right now.",
+      });
+    }
+  }
+
+  async function handleReject() {
+    if (!rejectTarget) {
+      return;
+    }
+
+    setRejectError(null);
+    setActionError(null);
+    setOptimisticStatuses((current) => ({
+      ...current,
+      [rejectTarget.id]: "rejected",
+    }));
+
+    try {
+      await rejectScheduleMutation.mutateAsync({
+        id: rejectTarget.id,
+        remarks: rejectRemarks.trim() || undefined,
+      });
+      setRejectTarget(null);
+      setRejectRemarks("");
+    } catch (error) {
+      setOptimisticStatuses((current) => removeKey(current, rejectTarget.id));
+      setRejectError(
+        error instanceof Error
+          ? error.message
+          : "We couldn't reject this request right now.",
+      );
+    }
+  }
+
+  async function handleReschedule() {
+    if (!rescheduleTarget || !rescheduleAt) {
+      setRescheduleError("Please choose a new date and time.");
+      return;
+    }
+
+    setRescheduleError(null);
+    setActionError(null);
+    setOptimisticStatuses((current) => ({
+      ...current,
+      [rescheduleTarget.id]: "rescheduled",
+    }));
+
+    try {
+      await rescheduleScheduleMutation.mutateAsync({
+        id: rescheduleTarget.id,
+        new_scheduled_at: new Date(rescheduleAt).toISOString(),
+        remarks: rescheduleRemarks.trim() || undefined,
+      });
+      setRescheduleTarget(null);
+      setRescheduleAt("");
+      setRescheduleRemarks("");
+    } catch (error) {
+      setOptimisticStatuses((current) =>
+        removeKey(current, rescheduleTarget.id),
+      );
+      setRescheduleError(
+        error instanceof Error
+          ? error.message
+          : "We couldn't reschedule this consultation right now.",
+      );
+    }
+  }
+
   return (
     <section className="flex w-full flex-col gap-8">
       <header className="space-y-2">
-        <h1 className="text-heading">Consultation Requests</h1>
+        <h1 className="text-heading">Pending Consultation Queue</h1>
         <p className="max-w-3xl text-[1.05rem] leading-8 text-content-muted">
-          Review and manage consultation requests from students
+          Review pending consultation requests from your advisees
         </p>
       </header>
 
       <ListWrapper
-        title="All Requests"
+        title="Pending Requests"
         filters={
           <FilterBar>
             <SearchInput
@@ -133,23 +206,6 @@ export default function AdviserConsultationsPage() {
               placeholder="Search requests"
               wrapperClassName="md:max-w-sm"
             />
-            <Select
-              value={statusFilter}
-              onValueChange={(value) =>
-                setStatusFilter(value as ConsultationRequestStatus | "all")
-              }
-            >
-              <SelectTrigger className="h-10 md:w-48">
-                <SelectValue placeholder="Filter consultation requests" />
-              </SelectTrigger>
-              <SelectContent>
-                {statusOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </FilterBar>
         }
         footer={<PaginationPlaceholder totalItems={filteredRequests.length} />}
@@ -167,19 +223,21 @@ export default function AdviserConsultationsPage() {
             <RequestCard
               key={request.id}
               request={request}
-              onApprove={() => approveScheduleMutation.mutate(request.id)}
-              onReject={() =>
-                rejectScheduleMutation.mutate({
-                  id: request.id,
-                })
+              optimisticStatus={optimisticStatuses[request.id]}
+              actionError={
+                actionError?.id === request.id ? actionError.message : null
               }
+              onApprove={() => {
+                void handleApprove(request);
+              }}
+              onReject={() => {
+                setRejectTarget(request);
+                setRejectRemarks("");
+                setRejectError(null);
+              }}
               isApproving={
                 approveScheduleMutation.isPending &&
                 approveScheduleMutation.variables === request.id
-              }
-              isCancelling={
-                cancelScheduleMutation.isPending &&
-                cancelScheduleMutation.variables === request.id
               }
               isRejecting={
                 rejectScheduleMutation.isPending &&
@@ -195,10 +253,6 @@ export default function AdviserConsultationsPage() {
                 setRescheduleRemarks("");
                 setRescheduleError(null);
               }}
-              onCancel={() => {
-                setCancelTarget(request);
-                setCancelError(null);
-              }}
             />
           ))
         ) : (
@@ -207,6 +261,87 @@ export default function AdviserConsultationsPage() {
           </p>
         )}
       </ListWrapper>
+
+      <Dialog
+        open={rejectTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRejectTarget(null);
+            setRejectRemarks("");
+            setRejectError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg border border-brand-subtle bg-surface-card">
+          <DialogHeader>
+            <DialogTitle>Reject Consultation Request</DialogTitle>
+            <DialogDescription className="text-content-muted">
+              Add optional remarks for the student before rejecting this
+              request.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogBody className="space-y-4">
+            {rejectTarget ? (
+              <div className="rounded-[1rem] border border-surface bg-surface-muted-soft px-4 py-4">
+                <div className="text-body-sm text-content-muted">Request</div>
+                <div className="mt-1 text-card-title">{rejectTarget.topic}</div>
+                <div className="mt-1 text-body text-content-muted">
+                  {rejectTarget.student_full_name}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="space-y-2">
+              <label className="text-body font-medium text-content-strong">
+                Remarks
+              </label>
+              <Textarea
+                value={rejectRemarks}
+                onChange={(event) => {
+                  setRejectRemarks(event.target.value);
+                  setRejectError(null);
+                }}
+                placeholder="Optional reason for rejecting this request"
+                className="min-h-[7rem] rounded-[0.95rem]"
+              />
+            </div>
+
+            {rejectError ? (
+              <div className="rounded-[1rem] border border-destructive/25 bg-destructive/10 px-4 py-3 text-body text-destructive">
+                {rejectError}
+              </div>
+            ) : null}
+          </DialogBody>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setRejectTarget(null)}
+            >
+              Keep Request
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={rejectScheduleMutation.isPending}
+              onClick={() => {
+                void handleReject();
+              }}
+            >
+              {rejectScheduleMutation.isPending ? (
+                <>
+                  <LoaderCircle className="animate-spin" />
+                  Rejecting...
+                </>
+              ) : (
+                "Reject Request"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={rescheduleTarget !== null}
@@ -223,7 +358,7 @@ export default function AdviserConsultationsPage() {
           <DialogHeader>
             <DialogTitle>Reschedule Consultation</DialogTitle>
             <DialogDescription className="text-content-muted">
-              Choose a new schedule time for this approved consultation.
+              Choose a new schedule time before sending the updated request.
             </DialogDescription>
           </DialogHeader>
 
@@ -285,30 +420,8 @@ export default function AdviserConsultationsPage() {
             <Button
               type="button"
               disabled={!rescheduleAt || rescheduleScheduleMutation.isPending}
-              onClick={async () => {
-                if (!rescheduleTarget || !rescheduleAt) {
-                  setRescheduleError("Please choose a new date and time.");
-                  return;
-                }
-
-                setRescheduleError(null);
-
-                try {
-                  await rescheduleScheduleMutation.mutateAsync({
-                    id: rescheduleTarget.id,
-                    new_scheduled_at: new Date(rescheduleAt).toISOString(),
-                    remarks: rescheduleRemarks.trim() || undefined,
-                  });
-                  setRescheduleTarget(null);
-                  setRescheduleAt("");
-                  setRescheduleRemarks("");
-                } catch (error) {
-                  setRescheduleError(
-                    error instanceof Error
-                      ? error.message
-                      : "We couldn't reschedule this consultation right now.",
-                  );
-                }
+              onClick={() => {
+                void handleReschedule();
               }}
             >
               {rescheduleScheduleMutation.isPending ? (
@@ -323,115 +436,35 @@ export default function AdviserConsultationsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <Dialog
-        open={cancelTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setCancelTarget(null);
-            setCancelError(null);
-          }
-        }}
-      >
-        <DialogContent className="max-w-lg border border-brand-subtle bg-surface-card">
-          <DialogHeader>
-            <DialogTitle>Cancel Approved Schedule</DialogTitle>
-            <DialogDescription className="text-content-muted">
-              This will cancel the approved consultation for both you and the
-              student.
-            </DialogDescription>
-          </DialogHeader>
-
-          <DialogBody className="space-y-4">
-            {cancelTarget ? (
-              <div className="rounded-[1rem] border border-surface bg-surface-muted-soft px-4 py-4">
-                <div className="text-body-sm text-content-muted">Request</div>
-                <div className="mt-1 text-card-title">{cancelTarget.topic}</div>
-                <div className="mt-1 text-body text-content-muted">
-                  {cancelTarget.student_full_name}
-                </div>
-              </div>
-            ) : null}
-
-            {cancelError ? (
-              <div className="rounded-[1rem] border border-destructive/25 bg-destructive/10 px-4 py-3 text-body text-destructive">
-                {cancelError}
-              </div>
-            ) : null}
-          </DialogBody>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setCancelTarget(null)}
-            >
-              Keep Schedule
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={cancelScheduleMutation.isPending}
-              onClick={async () => {
-                if (!cancelTarget) {
-                  return;
-                }
-
-                setCancelError(null);
-
-                try {
-                  await cancelScheduleMutation.mutateAsync(cancelTarget.id);
-                  setCancelTarget(null);
-                } catch (error) {
-                  setCancelError(
-                    error instanceof Error
-                      ? error.message
-                      : "We couldn't cancel this schedule right now.",
-                  );
-                }
-              }}
-            >
-              {cancelScheduleMutation.isPending ? (
-                <>
-                  <LoaderCircle className="animate-spin" />
-                  Cancelling...
-                </>
-              ) : (
-                "Cancel Schedule"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </section>
   );
 }
 
 function RequestCard({
-  isCancelling,
   isRescheduling,
   isApproving,
   isRejecting,
-  onCancel,
+  actionError,
+  optimisticStatus,
   onApprove,
   onReject,
   onReschedule,
   request,
 }: {
-  isCancelling: boolean;
   isRescheduling: boolean;
   isApproving: boolean;
   isRejecting: boolean;
-  onCancel: () => void;
+  actionError: string | null;
+  optimisticStatus?: ScheduleQueueStatus;
   onApprove: () => void;
   onReject: () => void;
   onReschedule: () => void;
   request: ScheduleListItem;
 }) {
-  const statusName = normalizeRequestStatus(request.status_name);
+  const statusName =
+    optimisticStatus ?? normalizeRequestStatus(request.status_name);
   const typeName = normalizeRequestType(request.type_name);
   const showPendingActions = statusName === "pending";
-  const showApprovedActions = statusName === "approved";
 
   return (
     <ListItem className="px-6 py-6">
@@ -497,7 +530,7 @@ function RequestCard({
               size="sm"
               className="bg-success text-white hover:bg-success/90"
               onClick={onApprove}
-              disabled={isApproving || isRejecting}
+              disabled={isApproving || isRejecting || isRescheduling}
             >
               {isApproving ? (
                 <LoaderCircle className="animate-spin" />
@@ -512,42 +545,17 @@ function RequestCard({
               size="sm"
               className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
               onClick={onReject}
-              disabled={isApproving || isRejecting}
+              disabled={isApproving || isRejecting || isRescheduling}
             >
               {isRejecting ? <LoaderCircle className="animate-spin" /> : <X />}
               Reject
             </Button>
-            <Button type="button" variant="outline" size="sm" disabled>
-              <RefreshCcw />
-              Reschedule
-            </Button>
-          </div>
-        </>
-      ) : null}
-
-      {showApprovedActions ? (
-        <>
-          <Separator className="my-6" />
-          <div className="flex flex-wrap gap-3">
-            {request.meet_link ? (
-              <Button asChild variant="outline" size="sm">
-                <Link href={request.meet_link} target="_blank" rel="noreferrer">
-                  <Video />
-                  Join Meeting
-                </Link>
-              </Button>
-            ) : (
-              <Button variant="outline" size="sm" disabled>
-                <Video />
-                Join Meeting
-              </Button>
-            )}
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={onReschedule}
-              disabled={isRescheduling || isCancelling}
+              disabled={isApproving || isRejecting || isRescheduling}
             >
               {isRescheduling ? (
                 <LoaderCircle className="animate-spin" />
@@ -556,18 +564,26 @@ function RequestCard({
               )}
               Reschedule
             </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={onCancel}
-              disabled={isRescheduling || isCancelling}
-            >
-              {isCancelling ? <LoaderCircle className="animate-spin" /> : <X />}
-              Cancel Schedule
-            </Button>
           </div>
         </>
+      ) : null}
+
+      {request.meet_link && statusName === "approved" ? (
+        <>
+          <Separator className="my-6" />
+          <Button asChild variant="outline" size="sm">
+            <Link href={request.meet_link} target="_blank" rel="noreferrer">
+              <Video />
+              Join Meeting
+            </Link>
+          </Button>
+        </>
+      ) : null}
+
+      {actionError ? (
+        <div className="mt-5 rounded-[1rem] border border-destructive/25 bg-destructive/10 px-4 py-3 text-body text-destructive">
+          {actionError}
+        </div>
       ) : null}
     </ListItem>
   );
@@ -593,12 +609,14 @@ function RequestDetail({
   );
 }
 
-function getStatusVariant(status: ConsultationRequestStatus) {
+function getStatusVariant(status: ScheduleQueueStatus) {
   switch (status) {
     case "approved":
       return "success";
     case "pending":
       return "warning";
+    case "rescheduled":
+      return "info";
     case "completed":
       return "outline";
     case "rejected":
@@ -618,10 +636,11 @@ function parseIsoDate(value: string) {
   return Number.isNaN(date.getTime()) ? new Date() : date;
 }
 
-function normalizeRequestStatus(value: string): ConsultationRequestStatus {
+function normalizeRequestStatus(value: string): ScheduleQueueStatus {
   if (
     value === "approved" ||
     value === "pending" ||
+    value === "rescheduled" ||
     value === "completed" ||
     value === "rejected" ||
     value === "cancelled"
@@ -630,6 +649,15 @@ function normalizeRequestStatus(value: string): ConsultationRequestStatus {
   }
 
   return "pending";
+}
+
+function removeKey<T>(
+  record: Record<string, T>,
+  key: string,
+): Record<string, T> {
+  const next = { ...record };
+  delete next[key];
+  return next;
 }
 
 function normalizeRequestType(value: string) {
