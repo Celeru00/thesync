@@ -127,8 +127,7 @@ type CalendarVisibilityOption = {
 };
 
 type WeekEventLayout = {
-  columnIndex: number;
-  columnsInCluster: number;
+  stackOrder: number;
 };
 
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -459,6 +458,13 @@ function getCompactEventTimeRangeLabel(event: CalendarEvent) {
   )}`;
 }
 
+function eventsOverlap(left: CalendarEvent, right: CalendarEvent) {
+  return (
+    getEventStartMinutes(left) < getEventEndMinutes(right) &&
+    getEventEndMinutes(left) > getEventStartMinutes(right)
+  );
+}
+
 function getWeekEvents(date: Date, events: CalendarEvent[]) {
   const weekStart = startOfWeek(date);
   const weekEnd = addDays(weekStart, 7);
@@ -546,56 +552,27 @@ function getWeekEventLayouts(weekDays: Date[], weekEvents: CalendarEvent[]) {
           return delta;
         }
 
-        return getEventEndMinutes(left) - getEventEndMinutes(right);
+        const durationDelta = right.durationHours - left.durationHours;
+        if (durationDelta !== 0) {
+          return durationDelta;
+        }
+
+        return left.ownerName.localeCompare(right.ownerName);
       });
-
-    let active: Array<{
-      eventId: string;
-      endMinutes: number;
-      columnIndex: number;
-    }> = [];
-    let currentCluster: Array<{ eventId: string; columnIndex: number }> = [];
-    let currentClusterColumns = 1;
-
-    const finalizeCluster = () => {
-      for (const item of currentCluster) {
-        layouts.set(item.eventId, {
-          columnIndex: item.columnIndex,
-          columnsInCluster: currentClusterColumns,
-        });
-      }
-      currentCluster = [];
-      currentClusterColumns = 1;
-    };
 
     for (const event of dayEvents) {
-      const eventStartMinutes = getEventStartMinutes(event);
-      active = active.filter((item) => item.endMinutes > eventStartMinutes);
+      const overlappingEvents = dayEvents.filter((candidate) =>
+        eventsOverlap(event, candidate),
+      );
+      const distinctDurations = [
+        ...new Set(
+          overlappingEvents.map((candidate) => candidate.durationHours),
+        ),
+      ].sort((left, right) => right - left);
 
-      if (active.length === 0 && currentCluster.length > 0) {
-        finalizeCluster();
-      }
-
-      const usedColumns = new Set(active.map((item) => item.columnIndex));
-      let columnIndex = 0;
-      while (usedColumns.has(columnIndex)) {
-        columnIndex += 1;
-      }
-
-      active.push({
-        eventId: event.id,
-        endMinutes: getEventEndMinutes(event),
-        columnIndex,
+      layouts.set(event.id, {
+        stackOrder: distinctDurations.indexOf(event.durationHours) + 1,
       });
-      currentCluster.push({
-        eventId: event.id,
-        columnIndex,
-      });
-      currentClusterColumns = Math.max(currentClusterColumns, active.length);
-    }
-
-    if (currentCluster.length > 0) {
-      finalizeCluster();
     }
   }
 
@@ -954,6 +931,7 @@ export function PortalCalendarView({
             ) : null}
 
             <WeekGrid
+              blockedWeekEvents={allWeekEvents}
               canCreateRequests={canCreateRequests}
               focusDate={focusDate}
               onEventSelect={setSelectedWeekEvent}
@@ -1479,6 +1457,7 @@ function MonthGrid({
 }
 
 function WeekGrid({
+  blockedWeekEvents,
   canCreateRequests,
   focusDate,
   onEventSelect,
@@ -1486,6 +1465,7 @@ function WeekGrid({
   weekDays,
   weekEvents,
 }: {
+  blockedWeekEvents: CalendarEvent[];
   canCreateRequests: boolean;
   focusDate: Date;
   onEventSelect: (event: CalendarEvent) => void;
@@ -1502,8 +1482,31 @@ function WeekGrid({
     [weekEvents],
   );
   const timedWeekEvents = useMemo(
-    () => weekEvents.filter((event) => !isAllDayEvent(event)),
+    () =>
+      weekEvents
+        .filter((event) => !isAllDayEvent(event))
+        .sort((left, right) => {
+          const startDelta = left.startsAt.getTime() - right.startsAt.getTime();
+          if (startDelta !== 0) {
+            return startDelta;
+          }
+
+          const durationDelta = right.durationHours - left.durationHours;
+          if (durationDelta !== 0) {
+            return durationDelta;
+          }
+
+          return left.ownerName.localeCompare(right.ownerName);
+        }),
     [weekEvents],
+  );
+  const allDayBlockedWeekEvents = useMemo(
+    () => blockedWeekEvents.filter((event) => isAllDayEvent(event)),
+    [blockedWeekEvents],
+  );
+  const timedBlockedWeekEvents = useMemo(
+    () => blockedWeekEvents.filter((event) => !isAllDayEvent(event)),
+    [blockedWeekEvents],
   );
   const { displayStartMinutes, weekTimeSlots } = useMemo(() => {
     const earliestEventMinutes = timedWeekEvents.length
@@ -1540,7 +1543,25 @@ function WeekGrid({
   const occupiedSlots = useMemo(() => {
     const slots = new Set<string>();
 
-    for (const event of timedWeekEvents) {
+    for (const event of allDayBlockedWeekEvents) {
+      const dayIndex = weekDays.findIndex((day) =>
+        isSameDay(day, event.startsAt),
+      );
+
+      if (dayIndex === -1) {
+        continue;
+      }
+
+      for (
+        let slotIndex = 0;
+        slotIndex < weekTimeSlots.length;
+        slotIndex += 1
+      ) {
+        slots.add(`${dayIndex}-${slotIndex}`);
+      }
+    }
+
+    for (const event of timedBlockedWeekEvents) {
       const dayIndex = weekDays.findIndex((day) =>
         isSameDay(day, event.startsAt),
       );
@@ -1554,7 +1575,7 @@ function WeekGrid({
         continue;
       }
 
-      const slotSpan = Math.max(1, event.durationHours * 2);
+      const slotSpan = Math.max(1, Math.ceil(event.durationHours * 2));
 
       for (let offset = 0; offset < slotSpan; offset += 1) {
         slots.add(`${dayIndex}-${startSlotIndex + offset}`);
@@ -1562,7 +1583,13 @@ function WeekGrid({
     }
 
     return slots;
-  }, [displayStartMinutes, timedWeekEvents, weekDays, weekTimeSlots.length]);
+  }, [
+    allDayBlockedWeekEvents,
+    displayStartMinutes,
+    timedBlockedWeekEvents,
+    weekDays,
+    weekTimeSlots.length,
+  ]);
 
   useEffect(() => {
     dragSelectionRef.current = dragSelection;
@@ -1829,21 +1856,11 @@ function WeekGrid({
 
             const isCompactEvent = event.durationHours <= 1;
             const layout = weekEventLayouts.get(event.id) ?? {
-              columnIndex: 0,
-              columnsInCluster: 1,
+              stackOrder: 1,
             };
-            const horizontalGapPx = 6;
             const horizontalInsetRem = 0.4;
-            const clusterGapWidthPx =
-              (layout.columnsInCluster - 1) * horizontalGapPx;
-            const widthStyle =
-              layout.columnsInCluster > 1
-                ? `calc((100% - ${horizontalInsetRem * 2}rem - ${clusterGapWidthPx}px) / ${layout.columnsInCluster})`
-                : `calc(100% - ${horizontalInsetRem * 2}rem)`;
-            const marginLeftStyle =
-              layout.columnsInCluster > 1
-                ? `calc(${horizontalInsetRem}rem + ${layout.columnIndex} * ((100% - ${horizontalInsetRem * 2}rem - ${clusterGapWidthPx}px) / ${layout.columnsInCluster} + ${horizontalGapPx}px))`
-                : `${horizontalInsetRem}rem`;
+            const widthStyle = `calc(100% - ${horizontalInsetRem * 2}rem)`;
+            const marginLeftStyle = `${horizontalInsetRem}rem`;
 
             return (
               <button
@@ -1853,7 +1870,6 @@ function WeekGrid({
                 title={event.title}
                 className={cn(
                   "z-10 my-1 flex h-[calc(100%-0.5rem)] flex-col justify-between overflow-hidden rounded-[0.8rem] px-2.5 py-2 text-left transition-shadow hover:shadow-[0_14px_28px_rgba(45,94,255,0.1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2",
-                  layout.columnsInCluster > 1 && "px-2 py-1.5",
                   eventToneClassNames[event.tone].weekBlock,
                 )}
                 style={{
@@ -1862,6 +1878,7 @@ function WeekGrid({
                   justifySelf: "start",
                   width: widthStyle,
                   marginLeft: marginLeftStyle,
+                  zIndex: 10 + layout.stackOrder,
                 }}
               >
                 <div className="min-h-0 flex-1 overflow-hidden">
