@@ -34,11 +34,15 @@ export async function POST(request: Request) {
     full_name: string;
     email: string;
     avatar_url?: string | null;
+    identifier: string;
+    department: string;
   };
 
   console.log("[frontend-auth] register_proxy_forwarding", {
     role: payload.role,
     hasAvatar: Boolean(payload.avatar_url),
+    hasIdentifier: Boolean(payload.identifier?.trim()),
+    hasDepartment: Boolean(payload.department?.trim()),
     hasAccessToken: Boolean(session.access_token),
   });
 

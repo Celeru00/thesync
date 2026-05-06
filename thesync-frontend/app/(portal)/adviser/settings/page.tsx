@@ -1,4 +1,3 @@
-import { AccountForm } from "@/components/settings/account-form";
 import { AccountInformation } from "@/components/settings/account-information";
 import { CalendarIntegration } from "@/components/settings/calendar-integration";
 import { DangerZone } from "@/components/settings/danger-zone";
@@ -7,23 +6,8 @@ import { ProfileForm } from "@/components/settings/profile-form";
 import { SettingsLayout } from "@/components/settings/settings-layout";
 import { getServerGoogleCalendarConnection } from "@/lib/calendar/server";
 import { getCalendarStatusMessage } from "@/lib/calendar/messages";
-import { requireAppRole } from "@/lib/auth/server";
-
-const departments = [
-  {
-    value: "dmpcs",
-    label: "Department of Mathematics, Physics, and Computer Science (DMPCS)",
-  },
-  {
-    value: "cas",
-    label: "Department of Food Science and Chemistry (DFSC)",
-  },
-  {
-    value: "cp",
-    label:
-      "Department of Biological Sciences and Environmental Studies (DBSES)",
-  },
-];
+import { getServerAuthState, requireAppRole } from "@/lib/auth/server";
+import type { User } from "@supabase/supabase-js";
 
 const notificationPreferences = [
   {
@@ -48,11 +32,51 @@ const notificationPreferences = [
   },
 ];
 
-const accountDetails = [
-  { label: "Account Type", value: "Adviser" },
-  { label: "Member Since", value: "April 2026" },
-  { label: "Last Login", value: "May 1, 2026" },
-];
+function formatSettingsDate(value: string | null | undefined) {
+  if (!value) {
+    return "Unavailable";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatSettingsDateTime(value: string | null | undefined) {
+  if (!value) {
+    return "Unavailable";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function getAuthMetadataValue(
+  user: User | null,
+  ...keys: string[]
+): string | null {
+  if (!user?.user_metadata || typeof user.user_metadata !== "object") {
+    return null;
+  }
+
+  const metadata = user.user_metadata as Record<string, unknown>;
+
+  for (const key of keys) {
+    const value = metadata[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
+}
 
 type AdviserSettingsPageProps = {
   searchParams: Promise<{
@@ -64,31 +88,63 @@ export default async function AdviserSettingsPage({
   searchParams,
 }: AdviserSettingsPageProps) {
   const currentUser = await requireAppRole("adviser");
+  const { authUser } = await getServerAuthState();
   const connection = await getServerGoogleCalendarConnection();
   const params = await searchParams;
   const calendarStatus = Array.isArray(params.calendar)
     ? params.calendar[0]
     : params.calendar;
+  const facultyNumber =
+    currentUser.identifier ??
+    getAuthMetadataValue(
+      authUser,
+      "faculty_number",
+      "facultyNumber",
+      "faculty_id",
+      "employee_id",
+      "identifier",
+    ) ??
+    "Not available";
+  const department =
+    currentUser.department ??
+    getAuthMetadataValue(
+      authUser,
+      "department",
+      "department_code",
+      "departmentCode",
+    ) ??
+    "Not available";
+  const accountDetails = [
+    { label: "Account Type", value: "Adviser" },
+    {
+      label: "Member Since",
+      value: formatSettingsDate(currentUser.created_at),
+    },
+    {
+      label: "Last Login",
+      value: formatSettingsDateTime(authUser?.last_sign_in_at),
+    },
+    {
+      label: "Calendar Sync",
+      value: connection.connected ? "Connected" : "Not connected",
+    },
+  ];
 
   return (
     <SettingsLayout
       aside={
         <>
-          <AccountForm idPrefix="adviser-account" />
           <AccountInformation details={accountDetails} />
           <DangerZone />
         </>
       }
     >
       <ProfileForm
-        idPrefix="adviser-profile"
-        avatarDescription="Upload a square photo for your adviser profile."
-        firstName="Maria"
-        lastName="Santos"
-        email="maria.santos@up.edu.ph"
-        identifierLabel="Student/Employee ID"
-        identifierValue="FAC-2026-001"
-        departments={departments}
+        departmentValue={department}
+        email={currentUser.email}
+        identifierLabel="Faculty Number"
+        identifierValue={facultyNumber}
+        roleLabel="Adviser"
       />
       <NotificationPreferences preferences={notificationPreferences} />
       <CalendarIntegration

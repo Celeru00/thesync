@@ -46,7 +46,10 @@ function buildAdviserProfile(adviser: AdviserDirectoryUser): AdviserProfile {
   return {
     id: adviser.id,
     name: normalizedName,
-    department: metadata?.department ?? "Department unavailable",
+    department:
+      adviser.department?.trim() ??
+      metadata?.department ??
+      "Department unavailable",
     departmentCode: metadata?.departmentCode ?? "N/A",
     availability: metadata?.availability ?? "Medium",
     email:

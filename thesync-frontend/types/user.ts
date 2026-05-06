@@ -5,6 +5,8 @@ export interface User {
   full_name: string;
   email: string;
   avatar_url?: string | null;
+  identifier?: string | null;
+  department?: string | null;
   created_at: string;
 }
 

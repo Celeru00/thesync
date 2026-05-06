@@ -76,3 +76,5 @@ class CompleteRegistrationRequest(DomainModel):
     full_name: NonEmptyText
     email: EmailStr
     avatar_url: str | None = None
+    identifier: NonEmptyText
+    department: NonEmptyText

@@ -172,6 +172,8 @@ export function RegisterFlow({
           full_name: buildFullName(profile.firstName, profile.lastName),
           email: email.trim(),
           avatar_url: null,
+          identifier: profile.identifier.trim(),
+          department: profile.department.trim(),
         }),
       });
 

@@ -7,6 +7,8 @@ export type AppSessionUser = {
   full_name: string;
   email: string;
   avatar_url: string | null;
+  identifier: string | null;
+  department: string | null;
   created_at: string;
   app_role: AppRole;
 };
@@ -136,6 +138,8 @@ export async function completeBackendRegistration(
     full_name: string;
     email: string;
     avatar_url?: string | null;
+    identifier: string;
+    department: string;
   },
 ): Promise<AppSessionUser> {
   debugLog("complete_backend_registration_start", {
