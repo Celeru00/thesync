@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import ConfigDict, EmailStr, Field, PositiveInt
+from pydantic import ConfigDict, EmailStr, Field, PositiveInt, model_validator
 
 from model.base import DomainModel, NonEmptyText
 from model.user import User
@@ -77,4 +77,16 @@ class CompleteRegistrationRequest(DomainModel):
     email: EmailStr
     avatar_url: str | None = None
     identifier: NonEmptyText
+    degree_program: NonEmptyText | None = None
     department: NonEmptyText
+
+    @model_validator(mode="after")
+    def validate_role_specific_fields(self) -> CompleteRegistrationRequest:
+        if self.role == "student" and not self.degree_program:
+            raise ValueError("Degree program is required for student registrations.")
+
+        return self
+
+
+class DeleteAccountResponse(DomainModel):
+    message: str

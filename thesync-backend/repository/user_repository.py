@@ -19,7 +19,8 @@ WEEKDAY_ORDER = (
 )
 REPORT_PAGE_SIZE = 1000
 USER_SELECT_CLAUSE = (
-    "id, role_id, full_name, email, avatar_url, " "identifier, department, created_at, roles(name)"
+    "id, role_id, full_name, email, avatar_url, "
+    "identifier, degree_program, department, created_at, roles(name)"
 )
 
 
@@ -122,6 +123,7 @@ def _to_user(row: dict[str, Any]) -> User:
             "email": row.get("email"),
             "avatar_url": row.get("avatar_url"),
             "identifier": row.get("identifier"),
+            "degree_program": row.get("degree_program"),
             "department": row.get("department"),
             "created_at": row.get("created_at"),
         }

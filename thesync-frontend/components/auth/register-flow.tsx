@@ -77,6 +77,14 @@ const departmentOptions = [
   "Department of Biological Sciences and Environmental Studies",
 ] as const;
 
+const degreeProgramOptions = [
+  "BS Computer Science",
+  "BS Data Science",
+  "BS Applied Mathematics",
+  "BS Biology",
+  "BS Food Technology",
+] as const;
+
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
@@ -117,6 +125,7 @@ export function RegisterFlow({
     firstName: initialPrefill.firstName,
     lastName: initialPrefill.lastName,
     identifier: "",
+    degreeProgram: "",
     department: "",
   });
 
@@ -128,6 +137,7 @@ export function RegisterFlow({
     profile.firstName.trim().length > 0 &&
     profile.lastName.trim().length > 0 &&
     profile.identifier.trim().length > 0 &&
+    (role !== "student" || profile.degreeProgram.trim().length > 0) &&
     profile.department.trim().length > 0;
 
   function handleEmailContinue() {
@@ -148,6 +158,7 @@ export function RegisterFlow({
     console.log("[frontend-auth] register_flow_submit", {
       role,
       hasIdentifier: Boolean(profile.identifier.trim()),
+      hasDegreeProgram: Boolean(profile.degreeProgram.trim()),
       department: profile.department,
     });
     setSubmitError(null);
@@ -173,6 +184,8 @@ export function RegisterFlow({
           email: email.trim(),
           avatar_url: null,
           identifier: profile.identifier.trim(),
+          degree_program:
+            role === "student" ? profile.degreeProgram.trim() : null,
           department: profile.department.trim(),
         }),
       });
@@ -448,10 +461,16 @@ function ProfileStep({
     firstName: string;
     lastName: string;
     identifier: string;
+    degreeProgram: string;
     department: string;
   };
   onProfileChange: (
-    field: "firstName" | "lastName" | "identifier" | "department",
+    field:
+      | "firstName"
+      | "lastName"
+      | "identifier"
+      | "degreeProgram"
+      | "department",
     value: string,
   ) => void;
   onBack: () => void;
@@ -498,6 +517,17 @@ function ProfileStep({
           onChange={(value) => onProfileChange("identifier", value)}
           placeholder={roleConfig.identifierPlaceholder}
         />
+
+        {role === "student" ? (
+          <Field
+            id="signup-degree-program"
+            label="Degree Program"
+            value={profile.degreeProgram}
+            onChange={(value) => onProfileChange("degreeProgram", value)}
+            options={degreeProgramOptions}
+            placeholder="Select your degree program"
+          />
+        ) : null}
 
         <Field
           id="signup-department"

@@ -103,6 +103,15 @@ export default async function StudentSettingsPage({
       "identifier",
     ) ??
     "Not available";
+  const degreeProgram =
+    currentUser.degree_program ??
+    getAuthMetadataValue(
+      authUser,
+      "degree_program",
+      "degreeProgram",
+      "program",
+    ) ??
+    "Not available";
   const department =
     currentUser.department ??
     getAuthMetadataValue(
@@ -139,6 +148,7 @@ export default async function StudentSettingsPage({
     >
       <ProfileForm
         departmentValue={department}
+        degreeProgramValue={degreeProgram}
         email={currentUser.email}
         identifierLabel="Student Number"
         identifierValue={studentNumber}

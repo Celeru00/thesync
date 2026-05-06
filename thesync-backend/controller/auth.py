@@ -8,8 +8,14 @@ from model.auth import (
     AuthInitializeRequest,
     AuthInitializeResponse,
     CompleteRegistrationRequest,
+    DeleteAccountResponse,
 )
-from usecase.auth import AuthFlowError, complete_registration, initialize_authenticated_session
+from usecase.auth import (
+    AuthFlowError,
+    complete_registration,
+    delete_current_account,
+    initialize_authenticated_session,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -94,6 +100,32 @@ def register_auth_user(
             "register_failed",
             user_id=str(current_claims.sub),
             role=payload.role,
+            error_code=exc.code,
+            reason=str(exc),
+        )
+        _raise_auth_flow_error(exc)
+
+
+@router.delete("/account", response_model=DeleteAccountResponse)
+def delete_auth_user_account(current_user: CurrentUser) -> DeleteAccountResponse:
+    try:
+        _debug_log(
+            "delete_account_start",
+            user_id=str(current_user.id),
+            role=current_user.app_role,
+        )
+        response = delete_current_account(current_user)
+        _debug_log(
+            "delete_account_success",
+            user_id=str(current_user.id),
+            role=current_user.app_role,
+        )
+        return response
+    except AuthFlowError as exc:
+        _debug_log(
+            "delete_account_failed",
+            user_id=str(current_user.id),
+            role=current_user.app_role,
             error_code=exc.code,
             reason=str(exc),
         )

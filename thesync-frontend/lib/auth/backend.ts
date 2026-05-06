@@ -8,6 +8,7 @@ export type AppSessionUser = {
   email: string;
   avatar_url: string | null;
   identifier: string | null;
+  degree_program: string | null;
   department: string | null;
   created_at: string;
   app_role: AppRole;
@@ -17,6 +18,10 @@ export type AuthInitializeResponse = {
   action: "redirect" | "register";
   redirect_to: string | null;
   register_role: SignupRole | null;
+};
+
+export type DeleteAccountResponse = {
+  message: string;
 };
 
 export class BackendAuthError extends Error {
@@ -139,6 +144,7 @@ export async function completeBackendRegistration(
     email: string;
     avatar_url?: string | null;
     identifier: string;
+    degree_program?: string | null;
     department: string;
   },
 ): Promise<AppSessionUser> {
@@ -166,4 +172,30 @@ export async function completeBackendRegistration(
     status: response.status,
   });
   return (await response.json()) as AppSessionUser;
+}
+
+export async function deleteBackendAccount(
+  accessToken: string,
+): Promise<DeleteAccountResponse> {
+  debugLog("delete_backend_account_start", {
+    hasAccessToken: Boolean(accessToken),
+  });
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/account`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    debugLog("delete_backend_account_failed", {
+      status: response.status,
+    });
+    throw await parseBackendAuthError(response);
+  }
+
+  debugLog("delete_backend_account_success", {
+    status: response.status,
+  });
+  return (await response.json()) as DeleteAccountResponse;
 }

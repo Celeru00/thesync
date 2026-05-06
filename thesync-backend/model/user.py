@@ -18,6 +18,7 @@ class User(DomainModel):
     email: EmailStr
     avatar_url: str | None = None
     identifier: NonEmptyText | None = None
+    degree_program: NonEmptyText | None = None
     department: NonEmptyText | None = None
     created_at: datetime
 
@@ -31,7 +32,7 @@ class User(DomainModel):
     def normalize_avatar_url(cls, value: str | None) -> str | None:
         return normalize_optional_text(value)
 
-    @field_validator("identifier", "department", mode="before")
+    @field_validator("identifier", "degree_program", "department", mode="before")
     @classmethod
     def normalize_optional_profile_fields(cls, value: str | None) -> str | None:
         return normalize_optional_text(value)
