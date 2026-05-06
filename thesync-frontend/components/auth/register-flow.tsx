@@ -166,19 +166,12 @@ export function RegisterFlow({
     }
 
     const roleId = getRoleIdForAppRole(role);
-
-    const { error } = await supabase.from("users").upsert(
-      {
-        avatar_url: getAuthAvatarUrl(user),
-        email: user.email ?? email.trim(),
-        full_name: buildFullName(profile.firstName, profile.lastName),
-        id: user.id,
-        role_id: roleId,
-      },
-      {
-        onConflict: "id",
-      },
-    );
+    const { error } = await supabase.rpc("complete_user_registration", {
+      p_avatar_url: getAuthAvatarUrl(user),
+      p_email: user.email ?? email.trim(),
+      p_full_name: buildFullName(profile.firstName, profile.lastName),
+      p_role_id: roleId,
+    });
 
     if (error) {
       console.error(error);

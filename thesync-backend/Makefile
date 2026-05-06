@@ -1,5 +1,6 @@
 .PHONY: help install dev run format lint fix check db-revision db-upgrade db-downgrade \
-	db-current db-history pre-commit-install pre-commit-run commit-example commit-check bump
+	db-current db-history pre-commit-install pre-commit-run commit-example commit-check bump \
+	render-deploy
 
 VENV_BIN = .venv/bin
 PYTHON = $(VENV_BIN)/python
@@ -18,6 +19,7 @@ HOST ?= 0.0.0.0
 PORT ?= 8000
 COMMIT_MSG ?= feat: describe your change
 MIGRATION_MESSAGE ?= describe schema change
+RENDER_DEPLOY_HOOK_URL ?= $(shell awk '/^RENDER_DEPLOY_HOOK_URL=/{sub(/^[^=]*=/,""); print; exit}' .env 2>/dev/null | sed "s/^['\\\"]//; s/['\\\"]$$//")
 PYTHON_PATHS = main.py controller model repository usecase alembic
 PYTHON_TARGETS = $(foreach path,$(PYTHON_PATHS),$(if $(wildcard $(path)),$(path),))
 
@@ -84,3 +86,8 @@ commit-check: ## Validate a commit message, e.g. make commit-check COMMIT_MSG="f
 
 bump: ## Bump the version with Commitizen
 	$(CZ) bump
+
+render-deploy: ## Trigger a backend deploy on Render with RENDER_DEPLOY_HOOK_URL
+	@test -n "$(RENDER_DEPLOY_HOOK_URL)" || (echo "Set RENDER_DEPLOY_HOOK_URL to your Render deploy hook URL." >&2; exit 1)
+	curl --fail --silent --show-error --request POST "$(RENDER_DEPLOY_HOOK_URL)"
+	@echo "Render deploy triggered."

@@ -49,6 +49,13 @@ async function finalizeProvisionedSession(
   return refreshError;
 }
 
+async function ensureAuthUserProfile(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+) {
+  const { error } = await supabase.rpc("ensure_auth_user_profile");
+  return error;
+}
+
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
@@ -81,6 +88,14 @@ export async function GET(request: Request) {
   if (userError || !user) {
     loginUrl.searchParams.set("error", "google-auth-failed");
     return NextResponse.redirect(loginUrl);
+  }
+
+  if (requestedRole !== "admin") {
+    const ensureError = await ensureAuthUserProfile(supabase);
+
+    if (ensureError) {
+      console.error("Failed to ensure auth user profile", ensureError);
+    }
   }
 
   const registrationComplete = isRegistrationComplete(user);

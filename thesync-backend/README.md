@@ -201,12 +201,20 @@ CI will fail if code isn't formatted or has lint errors.
 
 ## Deployment
 
-Production is deployed to **Render** (or Railway — decision to be finalized).
+Production is deployed to **Render**.
 
 - **`main` branch** auto-deploys to production
 - Docker-based builds using the included `Dockerfile`
 - Environment variables configured in the hosting dashboard
 - CORS restricted to the Vercel frontend domain
+
+You can also trigger a manual backend deploy with a Render deploy hook:
+
+```bash
+make render-deploy
+```
+
+Set `RENDER_DEPLOY_HOOK_URL` in your local `.env`. Do not commit the real hook URL.
 
 See `SETUP_GUIDE.md` in the org for deployment steps.
 
