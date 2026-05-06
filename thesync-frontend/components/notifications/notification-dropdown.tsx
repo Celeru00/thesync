@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Bell, CheckSquare } from "lucide-react";
+import { Bell, CheckSquare, LoaderCircle } from "lucide-react";
 import { Popover as PopoverPrimitive } from "radix-ui";
 import Link from "next/link";
 
@@ -16,8 +16,15 @@ const DROPDOWN_LIMIT = 5;
 
 interface NotificationDropdownProps {
   notifications: Notification[];
+  unreadCount: number;
   onMarkAsRead: (id: string) => void;
   onMarkAllAsRead: () => void;
+  onNotificationClick: (notification: Notification) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  isLoading?: boolean;
+  errorMessage?: string | null;
+  isMarkingAllRead?: boolean;
   /** href of the full notifications page (e.g. "/student/notifications") */
   allNotificationsHref: string;
   className?: string;
@@ -25,26 +32,32 @@ interface NotificationDropdownProps {
 
 export function NotificationDropdown({
   notifications,
+  unreadCount,
   onMarkAsRead,
   onMarkAllAsRead,
+  onNotificationClick,
+  open,
+  onOpenChange,
+  isLoading = false,
+  errorMessage = null,
+  isMarkingAllRead = false,
   allNotificationsHref,
   className,
 }: NotificationDropdownProps) {
-  const unreadCount = notifications.filter((n) => !n.is_read).length;
   const preview = notifications.slice(0, DROPDOWN_LIMIT);
 
   return (
-    <PopoverPrimitive.Root>
+    <PopoverPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <PopoverPrimitive.Trigger asChild>
         <button
           aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
           className={cn(
-            "relative flex size-9 items-center justify-center rounded-xl transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50",
+            "relative flex size-11 items-center justify-center rounded-2xl border border-surface bg-surface-card text-content-muted shadow-soft transition-colors hover:bg-surface-muted-soft hover:text-content-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50",
             className,
           )}
         >
-          <Bell className="size-5 text-content-muted" />
-          <span className="absolute -right-0.5 -top-0.5">
+          <Bell className="size-5" />
+          <span className="absolute -right-1 -top-1">
             <NotificationCountBadge count={unreadCount} />
           </span>
         </button>
@@ -67,16 +80,29 @@ export function NotificationDropdown({
             {unreadCount > 0 && (
               <button
                 onClick={onMarkAllAsRead}
+                disabled={isMarkingAllRead}
                 className="flex items-center gap-1.5 text-caption text-brand transition-colors hover:text-brand/80"
               >
-                <CheckSquare className="size-3.5" />
+                {isMarkingAllRead ? (
+                  <LoaderCircle className="size-3.5 animate-spin" />
+                ) : (
+                  <CheckSquare className="size-3.5" />
+                )}
                 Mark all read
               </button>
             )}
           </div>
 
           {/* List */}
-          {preview.length === 0 ? (
+          {isLoading ? (
+            <p className="px-4 py-8 text-center text-body-sm text-content-muted">
+              Loading notifications...
+            </p>
+          ) : errorMessage ? (
+            <p className="px-4 py-8 text-center text-body-sm text-destructive">
+              {errorMessage}
+            </p>
+          ) : preview.length === 0 ? (
             <p className="px-4 py-8 text-center text-body-sm text-content-muted">
               No notifications yet.
             </p>
@@ -87,6 +113,7 @@ export function NotificationDropdown({
                   key={n.id}
                   notification={n}
                   onMarkAsRead={() => onMarkAsRead(n.id)}
+                  onClick={() => onNotificationClick(n)}
                   compact
                 />
               ))}
