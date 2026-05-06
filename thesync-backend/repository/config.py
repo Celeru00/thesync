@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     supabase_url: str | None = None
     supabase_jwt_audience: str = "authenticated"
     supabase_jwt_secret: str | None = None
+    supabase_jwt_leeway_seconds: int = 60
 
     model_config = SettingsConfigDict(
         env_file=".env",

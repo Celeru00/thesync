@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Poppins } from "next/font/google";
+
+import { AuthSessionRecovery } from "@/components/auth/auth-session-recovery";
 import "./globals.css";
 
 const poppins = Poppins({
@@ -28,8 +30,12 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${poppins.variable} ${geistMono.variable} h-full`}
+      data-scroll-behavior="smooth"
     >
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        <AuthSessionRecovery />
+        {children}
+      </body>
     </html>
   );
 }

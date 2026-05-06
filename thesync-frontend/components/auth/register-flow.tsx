@@ -16,11 +16,8 @@ import {
 import {
   buildFullName,
   getDashboardPathForRole,
-  getAuthAvatarUrl,
   type SignupRole,
 } from "@/lib/auth/profile";
-import { completeBackendRegistration } from "@/lib/auth/backend";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -148,28 +145,15 @@ export function RegisterFlow({
       return;
     }
 
+    console.log("[frontend-auth] register_flow_submit", {
+      role,
+      hasIdentifier: Boolean(profile.identifier.trim()),
+      department: profile.department,
+    });
     setSubmitError(null);
     setIsSubmitting(true);
 
-    const supabase = createClient();
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user || !role) {
-      setSubmitError(
-        "Your Google session is missing. Start the sign-up flow again from login.",
-      );
-      setIsSubmitting(false);
-      return;
-    }
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
+    if (!role) {
       setSubmitError(
         "Your Google session is missing. Start the sign-up flow again from login.",
       );
@@ -178,13 +162,46 @@ export function RegisterFlow({
     }
 
     try {
-      const appUser = await completeBackendRegistration(session.access_token, {
-        role,
-        full_name: buildFullName(profile.firstName, profile.lastName),
-        email: user.email ?? email.trim(),
-        avatar_url: getAuthAvatarUrl(user),
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          role,
+          full_name: buildFullName(profile.firstName, profile.lastName),
+          email: email.trim(),
+          avatar_url: null,
+        }),
       });
 
+      const payload = (await response.json()) as
+        | { app_role: SignupRole | "admin" }
+        | { error_code?: string; message?: string };
+
+      console.log("[frontend-auth] register_flow_response", {
+        status: response.status,
+        ok: response.ok,
+        payload,
+      });
+
+      if (!response.ok) {
+        console.error("Frontend registration route failed", payload);
+        const errorPayload = payload as {
+          error_code?: string;
+          message?: string;
+        };
+        setSubmitError(
+          errorPayload.message ??
+            "We couldn't create your account right now. Please try again.",
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
+      const appUser = payload as {
+        app_role: SignupRole | "admin";
+      };
       router.replace(getDashboardPathForRole(appUser.app_role));
     } catch (error) {
       console.error(error);

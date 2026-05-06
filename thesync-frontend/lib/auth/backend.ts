@@ -57,9 +57,16 @@ async function parseBackendAuthError(response: Response) {
   });
 }
 
+function debugLog(event: string, data: Record<string, unknown>) {
+  console.log(`[frontend-auth] ${event}`, data);
+}
+
 export async function fetchCurrentAppUser(
   accessToken: string,
 ): Promise<AppSessionUser | null> {
+  debugLog("fetch_current_app_user_start", {
+    hasAccessToken: Boolean(accessToken),
+  });
   const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/me`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -68,13 +75,22 @@ export async function fetchCurrentAppUser(
   });
 
   if (response.status === 401) {
+    debugLog("fetch_current_app_user_unauthorized", {
+      status: response.status,
+    });
     return null;
   }
 
   if (!response.ok) {
+    debugLog("fetch_current_app_user_failed", {
+      status: response.status,
+    });
     throw await parseBackendAuthError(response);
   }
 
+  debugLog("fetch_current_app_user_success", {
+    status: response.status,
+  });
   return (await response.json()) as AppSessionUser;
 }
 
@@ -85,6 +101,11 @@ export async function initializeBackendAuth(
     requested_role?: AppRole | null;
   },
 ): Promise<AuthInitializeResponse> {
+  debugLog("initialize_backend_auth_start", {
+    flow: payload.flow,
+    requestedRole: payload.requested_role ?? null,
+    hasAccessToken: Boolean(accessToken),
+  });
   const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/initialize`, {
     method: "POST",
     headers: {
@@ -96,9 +117,15 @@ export async function initializeBackendAuth(
   });
 
   if (!response.ok) {
+    debugLog("initialize_backend_auth_failed", {
+      status: response.status,
+    });
     throw await parseBackendAuthError(response);
   }
 
+  debugLog("initialize_backend_auth_success", {
+    status: response.status,
+  });
   return (await response.json()) as AuthInitializeResponse;
 }
 
@@ -111,6 +138,10 @@ export async function completeBackendRegistration(
     avatar_url?: string | null;
   },
 ): Promise<AppSessionUser> {
+  debugLog("complete_backend_registration_start", {
+    role: payload.role,
+    hasAccessToken: Boolean(accessToken),
+  });
   const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/register`, {
     method: "POST",
     headers: {
@@ -121,8 +152,14 @@ export async function completeBackendRegistration(
   });
 
   if (!response.ok) {
+    debugLog("complete_backend_registration_failed", {
+      status: response.status,
+    });
     throw await parseBackendAuthError(response);
   }
 
+  debugLog("complete_backend_registration_success", {
+    status: response.status,
+  });
   return (await response.json()) as AppSessionUser;
 }

@@ -6,6 +6,7 @@ import type { Session, User } from "@supabase/supabase-js";
 
 import { fetchCurrentAppUser, type AppSessionUser } from "@/lib/auth/backend";
 import { getDashboardPathForRole, type AppRole } from "@/lib/auth/profile";
+import { isRefreshTokenNotFoundError } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
 
 type ServerAuthState = {
@@ -16,14 +17,35 @@ type ServerAuthState = {
 
 export const getServerAuthState = cache(async (): Promise<ServerAuthState> => {
   const supabase = await createClient();
-  const [
-    {
-      data: { user },
-    },
-    {
-      data: { session },
-    },
-  ] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
+  let user: User | null = null;
+  let session: Session | null = null;
+
+  try {
+    const [
+      {
+        data: { user: resolvedUser },
+      },
+      {
+        data: { session: resolvedSession },
+      },
+    ] = await Promise.all([
+      supabase.auth.getUser(),
+      supabase.auth.getSession(),
+    ]);
+
+    user = resolvedUser;
+    session = resolvedSession;
+  } catch (error) {
+    if (isRefreshTokenNotFoundError(error)) {
+      return {
+        authUser: null,
+        session: null,
+        appUser: null,
+      };
+    }
+
+    throw error;
+  }
 
   if (!user || !session?.access_token) {
     return {
