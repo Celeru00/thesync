@@ -11,7 +11,7 @@ import {
 import { usePathname } from "next/navigation";
 
 import { Sidebar, type SidebarItem } from "@/components/ui/sidebar";
-import type { AppSessionUser } from "@/lib/auth/server";
+import type { AppSessionUser } from "@/lib/auth/backend";
 
 const studentSidebarItems: SidebarItem[] = [
   { href: "/student", label: "Dashboard", icon: LayoutDashboard },

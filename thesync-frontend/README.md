@@ -77,7 +77,7 @@ Next.js loads `.env.local` automatically in development. Variables prefixed with
 
 | Variable                               | Description                                 | Example                   |
 | -------------------------------------- | ------------------------------------------- | ------------------------- |
-| `NEXT_PUBLIC_API_URL`                  | Base URL of the FastAPI backend             | `http://localhost:8000`   |
+| `NEXT_PUBLIC_API_BASE_URL`             | Base URL of the FastAPI backend             | `http://localhost:8000`   |
 | `NEXT_PUBLIC_SUPABASE_URL`             | Supabase project URL                        | `https://xxx.supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable key (safe for browser) | `sb_publishable_...`      |
 | `NEXT_PUBLIC_APP_URL`                  | This app's own URL (for OAuth callbacks)    | `http://localhost:3000`   |
@@ -152,7 +152,7 @@ We use a **single, centralized Axios instance** (`lib/api.ts`) to talk to the ba
 
 ### Key features
 
-- **Base URL:** reads from `NEXT_PUBLIC_API_URL`
+- **Base URL:** reads from `NEXT_PUBLIC_API_BASE_URL`
 - **Request interceptor:** automatically attaches the Supabase JWT to the `Authorization` header
 - **Response interceptor:** catches `401 Unauthorized` and triggers sign-out; normalizes error messages
 - **Typed requests:** TypeScript interfaces mirror the FastAPI Pydantic models
@@ -165,7 +165,7 @@ import axios from "axios";
 import { supabase } from "@/lib/supabase";
 
 export const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
   headers: { "Content-Type": "application/json" },
 });
 

@@ -15,11 +15,11 @@ import {
 
 import {
   buildFullName,
-  getAuthAvatarUrl,
   getDashboardPathForRole,
-  getRoleIdForAppRole,
+  getAuthAvatarUrl,
   type SignupRole,
 } from "@/lib/auth/profile";
+import { completeBackendRegistration } from "@/lib/auth/backend";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -165,51 +165,34 @@ export function RegisterFlow({
       return;
     }
 
-    const roleId = getRoleIdForAppRole(role);
-    const { error } = await supabase.rpc("complete_user_registration", {
-      p_avatar_url: getAuthAvatarUrl(user),
-      p_email: user.email ?? email.trim(),
-      p_full_name: buildFullName(profile.firstName, profile.lastName),
-      p_role_id: roleId,
-    });
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-    if (error) {
+    if (!session?.access_token) {
+      setSubmitError(
+        "Your Google session is missing. Start the sign-up flow again from login.",
+      );
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      const appUser = await completeBackendRegistration(session.access_token, {
+        role,
+        full_name: buildFullName(profile.firstName, profile.lastName),
+        email: user.email ?? email.trim(),
+        avatar_url: getAuthAvatarUrl(user),
+      });
+
+      router.replace(getDashboardPathForRole(appUser.app_role));
+    } catch (error) {
       console.error(error);
       setSubmitError(
         "We couldn't create your account right now. Please try again.",
       );
       setIsSubmitting(false);
-      return;
     }
-
-    const { error: metadataError } = await supabase.auth.updateUser({
-      data: {
-        app_role: role,
-        registration_completed: true,
-      },
-    });
-
-    if (metadataError) {
-      console.error(metadataError);
-      setSubmitError(
-        "Your account was created, but the session could not be finalized. Try signing in again.",
-      );
-      setIsSubmitting(false);
-      return;
-    }
-
-    const { error: refreshError } = await supabase.auth.refreshSession();
-
-    if (refreshError) {
-      console.error(refreshError);
-      setSubmitError(
-        "Your account was created, but the session could not be refreshed. Try signing in again.",
-      );
-      setIsSubmitting(false);
-      return;
-    }
-
-    router.replace(getDashboardPathForRole(role));
   }
 
   return (

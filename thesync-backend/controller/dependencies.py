@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 
-from model.auth import AppRole, AuthenticatedUser
+from model.auth import AppRole, AuthenticatedUser, SupabaseClaims
 from usecase.auth import AuthorizationError, ensure_roles
 
 
@@ -22,6 +22,21 @@ def get_current_user(request: Request) -> AuthenticatedUser:
 
 
 CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]
+
+
+def get_current_claims(request: Request) -> SupabaseClaims:
+    current_claims = getattr(request.state, "supabase_claims", None)
+
+    if current_claims is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required.",
+        )
+
+    return current_claims
+
+
+CurrentClaims = Annotated[SupabaseClaims, Depends(get_current_claims)]
 
 
 def require_roles(*allowed_roles: AppRole) -> Callable[[CurrentUser], AuthenticatedUser]:
