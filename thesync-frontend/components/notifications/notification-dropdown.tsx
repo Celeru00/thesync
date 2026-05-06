@@ -30,7 +30,7 @@ export function NotificationDropdown({
   allNotificationsHref,
   className,
 }: NotificationDropdownProps) {
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
   const preview = notifications.slice(0, DROPDOWN_LIMIT);
 
   return (

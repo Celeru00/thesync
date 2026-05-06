@@ -9,52 +9,57 @@ import type { Notification } from "@/types/notification";
 const MOCK_NOTIFICATIONS: Notification[] = [
   {
     id: "1",
-    type: "approved",
-    title: "Consultation Request Approved",
+    user_id: "user1",
+    schedule_id: "sch1",
     message:
       "Your consultation request for 'Chapter 1 Review' has been approved by Dr. Vicente Calag",
-    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    read: false,
-    relatedConsultationId: "1",
+    created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    is_read: false,
+    type: "approved",
+    title: "Consultation Request Approved",
   },
   {
     id: "2",
+    user_id: "user1",
+    schedule_id: "sch1",
+    message: "You have a consultation scheduled for tomorrow at 2:00 PM",
+    created_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    is_read: false,
     type: "reminder",
     title: "Upcoming Session Reminder",
-    message: "You have a consultation scheduled for tomorrow at 2:00 PM",
-    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-    read: false,
-    relatedConsultationId: "1",
   },
   {
     id: "3",
-    type: "reschedule",
-    title: "Reschedule Request",
+    user_id: "user1",
+    schedule_id: "sch2",
     message:
       "Dr. Maria Santos has requested to reschedule your consultation to May 10, 2026",
-    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    read: true,
-    relatedConsultationId: "2",
+    created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    is_read: true,
+    type: "reschedule",
+    title: "Reschedule Request",
   },
   {
     id: "4",
-    type: "approved",
-    title: "Defense Scheduled",
+    user_id: "user1",
+    schedule_id: "sch4",
     message:
       "Your thesis defense has been scheduled for May 15, 2026 at 1:00 PM",
-    timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    read: true,
-    relatedConsultationId: "4",
+    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    is_read: true,
+    type: "approved",
+    title: "Defense Scheduled",
   },
   {
     id: "5",
-    type: "info",
-    title: "Session Completed",
+    user_id: "user1",
+    schedule_id: "sch3",
     message:
       "Your consultation 'Literature Review' has been marked as completed",
-    timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-    read: true,
-    relatedConsultationId: "3",
+    created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    is_read: true,
+    type: "info",
+    title: "Session Completed",
   },
 ];
 
@@ -64,12 +69,12 @@ export function StudentNotifications() {
 
   function markAsRead(id: string) {
     setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
+      prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
     );
   }
 
   function markAllAsRead() {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
   }
 
   function deleteNotification(id: string) {

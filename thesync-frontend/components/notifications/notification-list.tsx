@@ -20,7 +20,7 @@ export function NotificationList({
   onMarkAllAsRead,
   onDelete,
 }: NotificationListProps) {
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   return (
     <div className="space-y-6">

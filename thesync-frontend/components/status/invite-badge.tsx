@@ -8,7 +8,6 @@ const CONFIG: Record<
   invited: { variant: "info", label: "Invited" },
   accepted: { variant: "success", label: "Accepted" },
   declined: { variant: "destructive", label: "Declined" },
-  pending: { variant: "warning", label: "Pending" },
 };
 
 interface InviteBadgeProps {
