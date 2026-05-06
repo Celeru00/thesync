@@ -51,6 +51,16 @@ type CalendarEvent = {
   type: CalendarEventType;
 };
 
+export type PortalCalendarEvent = {
+  id: string;
+  startsAt: string;
+  durationHours: number;
+  status: CalendarEventStatus;
+  title: string;
+  tone: CalendarEventTone;
+  type: CalendarEventType;
+};
+
 type CalendarDayCell = {
   date: Date;
   inCurrentMonth: boolean;
@@ -97,10 +107,10 @@ const requestDateFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
 });
 
-const sampleEvents: CalendarEvent[] = [
+const sampleEvents: PortalCalendarEvent[] = [
   {
     id: "chapter-1-review",
-    startsAt: new Date(2026, 4, 5, 14, 0),
+    startsAt: new Date(2026, 4, 5, 14, 0).toISOString(),
     durationHours: 1,
     status: "approved",
     title: "Chapter 1 Review",
@@ -109,7 +119,7 @@ const sampleEvents: CalendarEvent[] = [
   },
   {
     id: "methodology-discussion",
-    startsAt: new Date(2026, 4, 8, 10, 0),
+    startsAt: new Date(2026, 4, 8, 10, 0).toISOString(),
     durationHours: 1,
     status: "pending",
     title: "Methodology Discussion",
@@ -118,7 +128,7 @@ const sampleEvents: CalendarEvent[] = [
   },
   {
     id: "data-analysis-review",
-    startsAt: new Date(2026, 4, 12, 15, 0),
+    startsAt: new Date(2026, 4, 12, 15, 0).toISOString(),
     durationHours: 1,
     status: "approved",
     title: "Data Analysis Review",
@@ -127,7 +137,7 @@ const sampleEvents: CalendarEvent[] = [
   },
   {
     id: "thesis-defense",
-    startsAt: new Date(2026, 4, 15, 13, 0),
+    startsAt: new Date(2026, 4, 15, 13, 0).toISOString(),
     durationHours: 1,
     status: "approved",
     title: "Thesis Defense",
@@ -136,7 +146,7 @@ const sampleEvents: CalendarEvent[] = [
   },
   {
     id: "final-revisions",
-    startsAt: new Date(2026, 4, 20, 11, 0),
+    startsAt: new Date(2026, 4, 20, 11, 0).toISOString(),
     durationHours: 1,
     status: "pending",
     title: "Final Revisions",
@@ -244,11 +254,11 @@ function getEventTypeLabel(type: CalendarEventType) {
   return type === "consultation" ? "Consultation" : "Defense";
 }
 
-function getWeekEvents(date: Date) {
+function getWeekEvents(date: Date, events: CalendarEvent[]) {
   const weekStart = startOfWeek(date);
   const weekEnd = addDays(weekStart, 7);
 
-  return sampleEvents.filter((event) => {
+  return events.filter((event) => {
     return event.startsAt >= weekStart && event.startsAt < weekEnd;
   });
 }
@@ -281,15 +291,25 @@ function buildSlotDate(
 
 export function PortalCalendarView({
   portalRole = "student",
+  events = sampleEvents,
 }: {
   portalRole?: CalendarPortalRole;
+  events?: PortalCalendarEvent[];
 }) {
   const [view, setView] = useState<CalendarView>("month");
   const [focusDate, setFocusDate] = useState(new Date(2026, 4, 1));
   const [requestDraft, setRequestDraft] = useState<RequestDraft | null>(null);
+  const calendarEvents = useMemo<CalendarEvent[]>(
+    () =>
+      events.map((event) => ({
+        ...event,
+        startsAt: new Date(event.startsAt),
+      })),
+    [events],
+  );
 
   const monthCells = getMonthCells(focusDate);
-  const monthEvents = sampleEvents
+  const monthEvents = calendarEvents
     .filter((event) => isSameMonth(event.startsAt, focusDate))
     .sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime());
   const monthEventMap = new Map<string, CalendarEvent[]>();
@@ -305,7 +325,7 @@ export function PortalCalendarView({
   const weekDays = Array.from({ length: 7 }, (_, index) =>
     addDays(weekStart, index),
   );
-  const weekEvents = getWeekEvents(focusDate);
+  const weekEvents = getWeekEvents(focusDate, calendarEvents);
   const focusedDayEvents =
     monthEventMap.get(getEventDayKey(startOfDay(focusDate))) ?? [];
   const approvedCount = monthEvents.filter(

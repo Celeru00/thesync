@@ -5,6 +5,9 @@ import { DangerZone } from "@/components/settings/danger-zone";
 import { NotificationPreferences } from "@/components/settings/notification-preferences";
 import { ProfileForm } from "@/components/settings/profile-form";
 import { SettingsLayout } from "@/components/settings/settings-layout";
+import { getServerGoogleCalendarConnection } from "@/lib/calendar/server";
+import { getCalendarStatusMessage } from "@/lib/calendar/messages";
+import { requireAppRole } from "@/lib/auth/server";
 
 const departments = [
   {
@@ -51,7 +54,22 @@ const accountDetails = [
   { label: "Last Login", value: "May 1, 2026" },
 ];
 
-export default function AdviserSettingsPage() {
+type AdviserSettingsPageProps = {
+  searchParams: Promise<{
+    calendar?: string | string[];
+  }>;
+};
+
+export default async function AdviserSettingsPage({
+  searchParams,
+}: AdviserSettingsPageProps) {
+  const currentUser = await requireAppRole("adviser");
+  const connection = await getServerGoogleCalendarConnection();
+  const params = await searchParams;
+  const calendarStatus = Array.isArray(params.calendar)
+    ? params.calendar[0]
+    : params.calendar;
+
   return (
     <SettingsLayout
       aside={
@@ -73,7 +91,12 @@ export default function AdviserSettingsPage() {
         departments={departments}
       />
       <NotificationPreferences preferences={notificationPreferences} />
-      <CalendarIntegration email="maria.santos@up.edu.ph" />
+      <CalendarIntegration
+        email={currentUser.email}
+        connection={connection}
+        nextPath="/adviser/settings"
+        statusMessage={getCalendarStatusMessage(calendarStatus)}
+      />
     </SettingsLayout>
   );
 }
