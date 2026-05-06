@@ -55,7 +55,10 @@ export function NotificationItem({
   const { Icon, bg, color } = getIconConfig(notificationType);
 
   // Extract title from message or use provided title, default to first line
-  const title = n.title || n.message.split("\n")[0] || "Notification";
+  const title = formatMessageDateTimes(
+    n.title || n.message.split("\n")[0] || "Notification",
+  );
+  const message = formatMessageDateTimes(n.message);
 
   if (compact) {
     return (
@@ -104,7 +107,7 @@ export function NotificationItem({
             </div>
 
             <p className="line-clamp-2 text-sm leading-5 text-content-muted">
-              {getPreviewMessage(n.message, title)}
+              {getPreviewMessage(message, title)}
             </p>
           </div>
         </div>
@@ -155,7 +158,7 @@ export function NotificationItem({
           </div>
 
           <p className={cn("text-body-sm text-content-muted", "mb-3")}>
-            {n.message}
+            {message}
           </p>
 
           {/* Full-mode actions */}
@@ -194,4 +197,27 @@ function getPreviewMessage(message: string, title: string) {
   }
 
   return message;
+}
+
+const notificationDateTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+function formatMessageDateTimes(message: string) {
+  return message.replace(
+    /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})/g,
+    (value) => {
+      const date = new Date(value);
+
+      if (Number.isNaN(date.getTime())) {
+        return value;
+      }
+
+      return notificationDateTimeFormatter.format(date);
+    },
+  );
 }
