@@ -54,6 +54,10 @@ class ScheduleServiceUnavailableError(ScheduleServiceError):
     """Raised when the schedule service dependency is not configured."""
 
 
+class ScheduleIntegrationError(ScheduleServiceError):
+    """Raised when an upstream integration fails after a schedule state change."""
+
+
 class ScheduleService(Protocol):
     """Use-case contract for schedule CRUD operations."""
 

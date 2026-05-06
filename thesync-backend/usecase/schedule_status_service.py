@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from datetime import UTC, datetime
 from typing import Final
 from uuid import UUID
@@ -22,15 +23,18 @@ from repository.notification_repository import (
 )
 from repository.schedule_repository import ScheduleRepository, get_schedule_repository
 from repository.supabase_client import SupabaseClientConfigurationError
+from repository.user_repository import UserRepository, get_user_repository
 from usecase.calendar_service import (
     CalendarService,
     CalendarServiceError,
     GoogleCalendarScheduleService,
 )
+from usecase.email_service import EmailService, SendGridEmailService
 from usecase.schedule_slot_guard import ScheduleSlotGuard
 from usecase.schedules import (
     ScheduleConflictError,
     ScheduleForbiddenError,
+    ScheduleIntegrationError,
     ScheduleNotFoundError,
     ScheduleServiceUnavailableError,
     ScheduleStatusService,
@@ -59,12 +63,16 @@ class DefaultScheduleStatusService(ScheduleStatusService):
         notification_repository: NotificationRepository | None = None,
         audit_repository: AuditRepository | None = None,
         calendar_service: CalendarService | None = None,
+        user_repository: UserRepository | None = None,
+        email_service: EmailService | None = None,
     ) -> None:
         self._schedule_repository = schedule_repository
         self._availability_repository = availability_repository
         self._notification_repository = notification_repository
         self._audit_repository = audit_repository
         self._calendar_service = calendar_service
+        self._user_repository = user_repository
+        self._email_service = email_service
 
     @property
     def schedule_repository(self) -> ScheduleRepository:
@@ -105,6 +113,34 @@ class DefaultScheduleStatusService(ScheduleStatusService):
                 raise ScheduleServiceUnavailableError(str(exc)) from exc
 
         return self._audit_repository
+
+    @property
+    def email_service(self) -> EmailService:
+        if self._email_service is None:
+            self._email_service = SendGridEmailService()
+
+        return self._email_service
+
+    def _load_recipient_email_context(
+        self,
+        user_id: UUID,
+    ) -> tuple[str | None, str | None]:
+        try:
+            if self._user_repository is None:
+                self._user_repository = get_user_repository()
+            user = self._user_repository.get_by_id(user_id)
+        except (SupabaseClientConfigurationError, Exception) as exc:  # pragma: no cover - log only
+            print(
+                f"[email-service] recipient_lookup_failed user_id={user_id!s} reason={str(exc)!r}",
+                flush=True,
+                file=sys.stderr,
+            )
+            return None, None
+
+        if user is None:
+            return None, None
+
+        return str(user.email), user.full_name
 
     @property
     def calendar_service(self) -> CalendarService:
@@ -226,9 +262,20 @@ class DefaultScheduleStatusService(ScheduleStatusService):
         )
 
         try:
-            return self.calendar_service.sync(updated_schedule)
-        except CalendarServiceError:
-            return updated_schedule
+            synced_schedule = self.calendar_service.sync(updated_schedule)
+        except CalendarServiceError as exc:
+            raise ScheduleIntegrationError(str(exc)) from exc
+
+        student_email, student_name = self._load_recipient_email_context(synced_schedule.student_id)
+        self.email_service.send_schedule_approved(
+            student_email=student_email,
+            student_name=student_name,
+            adviser_name=current_user.full_name,
+            topic=synced_schedule.topic,
+            scheduled_at=synced_schedule.scheduled_at,
+            meet_link=synced_schedule.meet_link,
+        )
+        return synced_schedule
 
     def reject_schedule(
         self,
@@ -267,6 +314,16 @@ class DefaultScheduleStatusService(ScheduleStatusService):
             user_id=updated_schedule.student_id,
             schedule_id=updated_schedule.id,
             message=message,
+        )
+        student_email, student_name = self._load_recipient_email_context(
+            updated_schedule.student_id
+        )
+        self.email_service.send_schedule_rejected(
+            student_email=student_email,
+            student_name=student_name,
+            adviser_name=current_user.full_name,
+            topic=updated_schedule.topic,
+            remarks=payload.remarks,
         )
         return updated_schedule
 
@@ -327,5 +384,15 @@ class DefaultScheduleStatusService(ScheduleStatusService):
                 f'Your schedule for "{updated_schedule.topic}" was moved to '
                 f"{_format_datetime(updated_schedule.scheduled_at)}."
             ),
+        )
+        student_email, student_name = self._load_recipient_email_context(
+            updated_schedule.student_id
+        )
+        self.email_service.send_schedule_rescheduled(
+            student_email=student_email,
+            student_name=student_name,
+            adviser_name=current_user.full_name,
+            topic=updated_schedule.topic,
+            scheduled_at=updated_schedule.scheduled_at,
         )
         return updated_schedule

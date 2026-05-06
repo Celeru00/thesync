@@ -13,6 +13,7 @@ from repository.config import Settings, get_settings
 from repository.orm import GoogleCalendarConnectionRecord
 
 GOOGLE_CALENDAR_API_BASE_URL = "https://www.googleapis.com/calendar/v3"
+GoogleCalendarAttendee = dict[str, str]
 
 
 def _debug_log(event: str, **fields: object) -> None:
@@ -419,23 +420,28 @@ class GoogleCalendarClient:
         starts_at: datetime,
         ends_at: datetime,
         description: str | None = None,
+        attendees: list[GoogleCalendarAttendee] | None = None,
     ) -> GoogleCalendarRemoteEvent:
+        payload_body: dict[str, Any] = {
+            "summary": summary,
+            "description": description,
+            "start": {"dateTime": starts_at.astimezone(UTC).isoformat()},
+            "end": {"dateTime": ends_at.astimezone(UTC).isoformat()},
+            "conferenceData": {
+                "createRequest": {
+                    "requestId": str(uuid4()),
+                    "conferenceSolutionKey": {"type": "hangoutsMeet"},
+                }
+            },
+        }
+        if attendees:
+            payload_body["attendees"] = attendees
+
         payload = self._request_json(
             "events",
             method="POST",
             query={"conferenceDataVersion": "1"},
-            body={
-                "summary": summary,
-                "description": description,
-                "start": {"dateTime": starts_at.astimezone(UTC).isoformat()},
-                "end": {"dateTime": ends_at.astimezone(UTC).isoformat()},
-                "conferenceData": {
-                    "createRequest": {
-                        "requestId": str(uuid4()),
-                        "conferenceSolutionKey": {"type": "hangoutsMeet"},
-                    }
-                },
-            },
+            body=payload_body,
         )
         event = _build_remote_event(payload)
         _debug_log(
@@ -454,17 +460,22 @@ class GoogleCalendarClient:
         starts_at: datetime,
         ends_at: datetime,
         description: str | None = None,
+        attendees: list[GoogleCalendarAttendee] | None = None,
     ) -> GoogleCalendarRemoteEvent:
+        payload_body: dict[str, Any] = {
+            "summary": summary,
+            "description": description,
+            "start": {"dateTime": starts_at.astimezone(UTC).isoformat()},
+            "end": {"dateTime": ends_at.astimezone(UTC).isoformat()},
+        }
+        if attendees:
+            payload_body["attendees"] = attendees
+
         payload = self._request_json(
             f"events/{quote(event_id, safe='')}",
             method="PATCH",
             query={"conferenceDataVersion": "1"},
-            body={
-                "summary": summary,
-                "description": description,
-                "start": {"dateTime": starts_at.astimezone(UTC).isoformat()},
-                "end": {"dateTime": ends_at.astimezone(UTC).isoformat()},
-            },
+            body=payload_body,
         )
         event = _build_remote_event(payload)
         _debug_log(
