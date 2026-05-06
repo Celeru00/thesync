@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -12,6 +13,8 @@ from model.calendar import (
     GoogleCalendarConnectionStatus,
     GoogleCalendarConnectRequest,
     GoogleCalendarEvent,
+    GoogleCalendarOverlayEvent,
+    GoogleCalendarOverlaySource,
 )
 from repository.google_calendar import CalendarSyncConfigurationError
 from usecase.calendar import (
@@ -21,12 +24,19 @@ from usecase.calendar import (
     get_google_calendar_connection_status,
     list_google_calendar_events,
 )
+from usecase.calendar import (
+    list_google_calendar_overlay_events as fetch_google_calendar_overlay_events,
+)
+from usecase.calendar import (
+    list_google_calendar_overlay_sources as fetch_google_calendar_overlay_sources,
+)
 from usecase.calendar_sync import CalendarSyncError, sync_google_calendar_updates
 
 router = APIRouter(prefix="/calendar", tags=["calendar"])
 
 AdminUser = Annotated[AuthenticatedUser, Depends(require_roles("admin"))]
 OptionalDateTimeQuery = Annotated[datetime | None, Query()]
+OverlayUserIdsQuery = Annotated[list[UUID], Query(alias="user_id")]
 
 
 @router.get("/google/connection", response_model=GoogleCalendarConnectionStatus)
@@ -61,6 +71,34 @@ def get_google_calendar_events(
     try:
         return list_google_calendar_events(
             current_user,
+            time_min=time_min,
+            time_max=time_max,
+        )
+    except CalendarIntegrationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@router.get("/google/overlay-sources", response_model=list[GoogleCalendarOverlaySource])
+def get_google_calendar_overlay_sources(
+    current_user: CurrentUser,
+) -> list[GoogleCalendarOverlaySource]:
+    try:
+        return fetch_google_calendar_overlay_sources(current_user)
+    except CalendarIntegrationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@router.get("/google/overlay-events", response_model=list[GoogleCalendarOverlayEvent])
+def get_google_calendar_overlay_events(
+    current_user: CurrentUser,
+    user_ids: OverlayUserIdsQuery,
+    time_min: OptionalDateTimeQuery = None,
+    time_max: OptionalDateTimeQuery = None,
+) -> list[GoogleCalendarOverlayEvent]:
+    try:
+        return fetch_google_calendar_overlay_events(
+            current_user,
+            user_ids=user_ids,
             time_min=time_min,
             time_max=time_max,
         )
