@@ -18,6 +18,9 @@ WEEKDAY_ORDER = (
     "Saturday",
 )
 REPORT_PAGE_SIZE = 1000
+USER_SELECT_CLAUSE = (
+    "id, role_id, full_name, email, avatar_url, " "identifier, department, created_at, roles(name)"
+)
 
 
 def _first_row(data: Any) -> dict[str, Any] | None:
@@ -118,6 +121,8 @@ def _to_user(row: dict[str, Any]) -> User:
             "full_name": row.get("full_name"),
             "email": row.get("email"),
             "avatar_url": row.get("avatar_url"),
+            "identifier": row.get("identifier"),
+            "department": row.get("department"),
             "created_at": row.get("created_at"),
         }
     )
@@ -191,10 +196,7 @@ class UserRepository:
 
     def get_by_id(self, user_id: UUID | str) -> User | None:
         response = (
-            self._client.table("users")
-            .select("id, role_id, full_name, email, avatar_url, created_at, roles(name)")
-            .eq("id", str(user_id))
-            .execute()
+            self._client.table("users").select(USER_SELECT_CLAUSE).eq("id", str(user_id)).execute()
         )
         row = _first_row(response.data)
 
@@ -206,7 +208,7 @@ class UserRepository:
     def get_by_email(self, email: str) -> User | None:
         response = (
             self._client.table("users")
-            .select("id, role_id, full_name, email, avatar_url, created_at, roles(name)")
+            .select(USER_SELECT_CLAUSE)
             .eq("email", _normalize_email(email))
             .execute()
         )
@@ -225,7 +227,7 @@ class UserRepository:
 
         response = (
             self._client.table("users")
-            .select("id, role_id, full_name, email, avatar_url, created_at, roles(name)")
+            .select(USER_SELECT_CLAUSE)
             .eq("role_id", role_id)
             .order("full_name")
             .execute()

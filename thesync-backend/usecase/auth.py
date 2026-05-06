@@ -139,6 +139,8 @@ def complete_registration(
             full_name=payload.full_name,
             email=str(payload.email),
             avatar_url=payload.avatar_url,
+            identifier=payload.identifier,
+            department=payload.department,
         )
     except ProvisioningError as exc:
         raise AuthFlowError(

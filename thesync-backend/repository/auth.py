@@ -190,6 +190,23 @@ def _resolve_avatar_url(claims: SupabaseClaims) -> str | None:
     return _get_metadata_value(claims, "avatar_url", "picture")
 
 
+def _resolve_identifier(claims: SupabaseClaims) -> str | None:
+    return _get_metadata_value(
+        claims,
+        "identifier",
+        "student_number",
+        "studentNumber",
+        "faculty_number",
+        "facultyNumber",
+        "faculty_id",
+        "employee_id",
+    )
+
+
+def _resolve_department(claims: SupabaseClaims) -> str | None:
+    return _get_metadata_value(claims, "department", "department_code", "departmentCode")
+
+
 def _raise_auth_storage_unavailable(exc: Exception) -> None:
     raise AuthServiceUnavailableError(
         "Authentication services are temporarily unavailable. "
@@ -239,6 +256,8 @@ def _to_authenticated_user(user_record: UserRecord) -> AuthenticatedUser:
             "full_name": user_record.full_name,
             "email": user_record.email,
             "avatar_url": user_record.avatar_url,
+            "identifier": user_record.identifier,
+            "department": user_record.department,
             "created_at": user_record.created_at,
             "app_role": app_role,
         }
@@ -251,6 +270,8 @@ def _ensure_user_record(session, claims: SupabaseClaims) -> UserRecord:
     resolved_full_name = _resolve_full_name(claims) or str(claims.sub)
     resolved_email = _resolve_email(claims) or f"{claims.sub}{PENDING_EMAIL_DOMAIN}"
     resolved_avatar_url = _resolve_avatar_url(claims)
+    resolved_identifier = _resolve_identifier(claims)
+    resolved_department = _resolve_department(claims)
 
     if user_record is None:
         user_record = UserRecord(
@@ -259,6 +280,8 @@ def _ensure_user_record(session, claims: SupabaseClaims) -> UserRecord:
             full_name=resolved_full_name,
             email=resolved_email,
             avatar_url=resolved_avatar_url,
+            identifier=resolved_identifier,
+            department=resolved_department,
             registration_completed=False,
         )
         session.add(user_record)
@@ -273,6 +296,12 @@ def _ensure_user_record(session, claims: SupabaseClaims) -> UserRecord:
 
     if resolved_avatar_url and not user_record.avatar_url:
         user_record.avatar_url = resolved_avatar_url
+
+    if resolved_identifier and not user_record.identifier:
+        user_record.identifier = resolved_identifier
+
+    if resolved_department and not user_record.department:
+        user_record.department = resolved_department
 
     session.flush()
     return user_record
@@ -344,6 +373,8 @@ def complete_application_user_registration(
     full_name: str,
     email: str,
     avatar_url: str | None,
+    identifier: str,
+    department: str,
 ) -> AuthenticatedUser:
     try:
         with SessionLocal() as session:
@@ -354,6 +385,8 @@ def complete_application_user_registration(
             user_record.avatar_url = _normalize_optional_text(avatar_url) or _resolve_avatar_url(
                 claims
             )
+            user_record.identifier = identifier.strip()
+            user_record.department = department.strip()
             user_record.registration_completed = True
             session.commit()
     except IntegrityError as exc:
