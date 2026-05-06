@@ -121,11 +121,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 role="adviser"
                 tone="adviser"
               />
-              <GoogleRoleButton
-                label="Sign in as Admin"
-                role="admin"
-                tone="admin"
-              />
             </div>
 
             <div className="mt-3 h-px w-full bg-surface" />
