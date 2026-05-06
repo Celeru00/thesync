@@ -1,5 +1,5 @@
-import { StudentNotifications } from "@/components/student/notifications";
+import { LiveNotificationsPage } from "@/components/notifications/live-notifications-page";
 
 export default function StudentNotificationsPage() {
-  return <StudentNotifications />;
+  return <LiveNotificationsPage />;
 }

@@ -77,7 +77,7 @@ export function StudentConsultationsOverview() {
 
   return (
     <section className="flex w-full flex-col gap-8">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between lg:pr-16">
         <div className="space-y-2">
           <h1 className="text-heading">My Consultations</h1>
           <p className="max-w-3xl text-[1.05rem] leading-8 text-content-muted">
