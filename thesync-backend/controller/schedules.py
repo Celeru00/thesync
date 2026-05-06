@@ -19,6 +19,7 @@ from model.schedule import (
 from usecase.schedules import (
     ScheduleConflictError,
     ScheduleForbiddenError,
+    ScheduleIntegrationError,
     ScheduleNotFoundError,
     ScheduleService,
     ScheduleServiceUnavailableError,
@@ -131,6 +132,9 @@ def _raise_schedule_http_error(exc: Exception) -> None:
             detail = str(exc)
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from exc
 
+    if isinstance(exc, ScheduleIntegrationError):
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
     if isinstance(exc, ScheduleServiceUnavailableError):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
@@ -152,6 +156,7 @@ def create_schedule(
         ScheduleForbiddenError,
         ScheduleNotFoundError,
         ScheduleConflictError,
+        ScheduleIntegrationError,
         ScheduleServiceUnavailableError,
     ) as exc:
         _raise_schedule_http_error(exc)

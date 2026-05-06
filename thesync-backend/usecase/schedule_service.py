@@ -29,6 +29,7 @@ from repository.schedule_repository import (
 )
 from repository.supabase_client import SupabaseClientConfigurationError
 from repository.user_repository import UserRepository, get_user_repository
+from usecase.email_service import EmailService, SendGridEmailService
 from usecase.schedule_slot_guard import ScheduleSlotGuard
 from usecase.schedules import (
     ScheduleConflictError,
@@ -73,6 +74,7 @@ class DefaultScheduleService(ScheduleService):
         user_repository: UserRepository | None = None,
         notification_repository: NotificationRepository | None = None,
         audit_repository: AuditRepository | None = None,
+        email_service: EmailService | None = None,
     ) -> None:
         self._schedule_repository = schedule_repository
         self._availability_repository = availability_repository
@@ -80,6 +82,7 @@ class DefaultScheduleService(ScheduleService):
         self._user_repository = user_repository
         self._notification_repository = notification_repository
         self._audit_repository = audit_repository
+        self._email_service = email_service
 
     @property
     def schedule_repository(self) -> ScheduleRepository:
@@ -141,6 +144,13 @@ class DefaultScheduleService(ScheduleService):
 
         return self._audit_repository
 
+    @property
+    def email_service(self) -> EmailService:
+        if self._email_service is None:
+            self._email_service = SendGridEmailService()
+
+        return self._email_service
+
     def _require_student(self, current_user: AuthenticatedUser) -> None:
         if current_user.app_role != STUDENT_ROLE_NAME:
             raise ScheduleForbiddenError("Only students can perform this schedule action.")
@@ -163,10 +173,12 @@ class DefaultScheduleService(ScheduleService):
 
         return adviser
 
-    def _ensure_schedule_type_exists(self, type_id: int) -> None:
+    def _ensure_schedule_type_exists(self, type_id: int) -> str:
         schedule_type_name = self.schedule_repository.get_type_name_by_id(type_id)
         if schedule_type_name is None:
             raise ScheduleValidationError("Selected schedule type is invalid.")
+
+        return schedule_type_name
 
     def _resolve_lookup_filter_id(
         self,
@@ -283,7 +295,7 @@ class DefaultScheduleService(ScheduleService):
     ) -> Schedule:
         self._require_student(current_user)
         adviser = self._get_adviser_or_raise(payload.adviser_id)
-        self._ensure_schedule_type_exists(payload.type_id)
+        schedule_type_name = self._ensure_schedule_type_exists(payload.type_id)
         normalized_scheduled_at = _normalize_datetime(payload.scheduled_at)
 
         self.slot_guard.ensure_slot_available(
@@ -317,6 +329,14 @@ class DefaultScheduleService(ScheduleService):
                 f'{current_user.full_name} requested a schedule for "{schedule.topic}" '
                 f"{_format_datetime(schedule.scheduled_at)}."
             ),
+        )
+        self.email_service.send_schedule_submitted(
+            adviser_email=str(adviser.email),
+            adviser_name=adviser.full_name,
+            student_name=current_user.full_name,
+            schedule_type=schedule_type_name,
+            topic=schedule.topic,
+            scheduled_at=payload.scheduled_at,
         )
         return schedule
 

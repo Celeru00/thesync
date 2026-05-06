@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     google_oauth_client_secret: str | None = None
     google_oauth_token_uri: str = "https://oauth2.googleapis.com/token"
     google_calendar_scope: str = "https://www.googleapis.com/auth/calendar"
+    sendgrid_api_key: str | None = None
+    sendgrid_from_email: str | None = None
+    sendgrid_from_name: str | None = None
+    sendgrid_template_schedule_submitted: str | None = None
+    sendgrid_template_schedule_approved: str | None = None
+    sendgrid_template_schedule_rejected: str | None = None
+    sendgrid_template_schedule_rescheduled: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",

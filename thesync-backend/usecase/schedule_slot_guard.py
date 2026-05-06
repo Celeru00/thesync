@@ -72,7 +72,7 @@ class ScheduleSlotGuard:
                     from_date=slot_start,
                     to_date=slot_end,
                     page=1,
-                    page_size=1000,
+                    limit=1000,
                 ),
             )
             for schedule in schedules_page.items:
