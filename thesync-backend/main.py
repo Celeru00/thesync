@@ -2,8 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from controller.auth import router as auth_router
+from controller.availability import router as availability_router
 from controller.calendar import router as calendar_router
 from controller.middleware import SupabaseAuthMiddleware
+from controller.notifications import router as notifications_router
+from controller.panelists import router as panelists_router
+from controller.schedules import router as schedules_router
 from repository.config import get_settings
 
 settings = get_settings()
@@ -19,6 +23,10 @@ app.add_middleware(
 app.add_middleware(SupabaseAuthMiddleware)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(calendar_router, prefix="/api")
+app.include_router(availability_router, prefix="/api")
+app.include_router(panelists_router, prefix="/api")
+app.include_router(notifications_router, prefix="/api")
+app.include_router(schedules_router, prefix="/api")
 
 
 @app.get("/")

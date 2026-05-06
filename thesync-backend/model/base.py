@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, PositiveInt
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveInt
 
 NonEmptyText = Annotated[str, Field(min_length=1)]
 
@@ -31,3 +31,12 @@ class LookupModel(DomainModel):
 
     id: PositiveInt
     name: NonEmptyText
+
+
+class PaginatedResult[DomainModelT: DomainModel](DomainModel):
+    """Simple paginated result wrapper for repository list queries."""
+
+    items: list[DomainModelT]
+    total: NonNegativeInt
+    page: PositiveInt
+    page_size: PositiveInt
