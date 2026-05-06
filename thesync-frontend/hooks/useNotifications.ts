@@ -4,6 +4,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type UseQueryOptions,
   type UseMutationResult,
   type UseQueryResult,
 } from "@tanstack/react-query";
@@ -26,10 +27,15 @@ export const notificationQueryKeys = {
 
 export function useNotifications(
   params?: ListNotificationsParams,
+  options?: Omit<
+    UseQueryOptions<NotificationListResponse, Error>,
+    "queryKey" | "queryFn"
+  >,
 ): UseQueryResult<NotificationListResponse, Error> {
   return useQuery({
     queryKey: notificationQueryKeys.list(params),
     queryFn: () => listNotifications(params),
+    ...options,
   });
 }
 
@@ -116,12 +122,46 @@ export function useMarkNotificationRead(): UseMutationResult<
 export function useMarkAllNotificationsRead(): UseMutationResult<
   MarkAllNotificationsReadResult,
   Error,
-  void
+  void,
+  NotificationMutationContext
 > {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: () => markAllNotificationsRead(),
+    onMutate: async () => {
+      await queryClient.cancelQueries({
+        queryKey: notificationQueryKeys.all,
+      });
+
+      const previousLists =
+        queryClient.getQueriesData<NotificationListResponse>({
+          queryKey: notificationQueryKeys.all,
+        });
+
+      for (const [queryKey, response] of previousLists) {
+        if (!response) {
+          continue;
+        }
+
+        queryClient.setQueryData<NotificationListResponse>(queryKey, {
+          ...response,
+          items: response.items.map((item) => ({ ...item, is_read: true })),
+          total_unread: 0,
+        });
+      }
+
+      return { previousLists };
+    },
+    onError: (_error, _variables, context) => {
+      if (!context) {
+        return;
+      }
+
+      for (const [queryKey, data] of context.previousLists) {
+        queryClient.setQueryData(queryKey, data);
+      }
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: notificationQueryKeys.all,

@@ -38,6 +38,7 @@ interface NotificationItemProps {
   notification: Notification;
   onMarkAsRead?: () => void;
   onDelete?: () => void;
+  onClick?: () => void;
   /** Compact mode for use inside the dropdown — hides action buttons, clips message */
   compact?: boolean;
 }
@@ -46,6 +47,7 @@ export function NotificationItem({
   notification: n,
   onMarkAsRead,
   onDelete,
+  onClick,
   compact = false,
 }: NotificationItemProps) {
   // Default to 'info' type if not provided
@@ -57,8 +59,21 @@ export function NotificationItem({
 
   return (
     <div
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={(event) => {
+        if (!onClick || (event.key !== "Enter" && event.key !== " ")) {
+          return;
+        }
+
+        event.preventDefault();
+        onClick();
+      }}
       className={cn(
         "transition-colors",
+        onClick &&
+          "cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-brand/50",
         !n.is_read && "bg-info-soft/20",
         compact ? "px-4 py-3" : "px-6 py-4",
       )}
