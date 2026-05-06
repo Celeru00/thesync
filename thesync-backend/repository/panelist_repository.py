@@ -83,12 +83,36 @@ class PanelistRepository:
         except (KeyError, TypeError, ValueError):
             return None
 
+    def get_invite_status_id(self, status_name: str) -> int | None:
+        return self._get_invite_status_id(status_name)
+
+    def get_invite_status_name(self, invite_status_id: int) -> str | None:
+        response = (
+            self._client.table("invite_statuses")
+            .select("name")
+            .eq("id", invite_status_id)
+            .execute()
+        )
+        row = _first_row(response.data)
+
+        if row is None:
+            return None
+
+        status_name = row.get("name")
+        if not isinstance(status_name, str):
+            return None
+
+        normalized_status_name = status_name.strip().lower()
+        return normalized_status_name or None
+
     def create(self, schedule_id: UUID, panelist_id: UUID) -> PanelistAssignment:
         assignment_id = uuid4()
-        pending_status_id = self._get_invite_status_id("pending")
+        pending_status_id = self._get_invite_status_id("invited") or self._get_invite_status_id(
+            "pending"
+        )
 
         if pending_status_id is None:
-            raise PanelistRepositoryNotFoundError("Pending invite status lookup was not found.")
+            raise PanelistRepositoryNotFoundError("Invite status lookup was not found.")
 
         payload = {
             "id": str(assignment_id),

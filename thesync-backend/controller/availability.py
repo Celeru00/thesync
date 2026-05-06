@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from datetime import date, datetime
 from typing import Annotated, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
 from controller.dependencies import CurrentUser
 from model.availability import (
@@ -107,9 +108,10 @@ def get_adviser_free_slots(
     adviser_id: UUID,
     current_user: CurrentUser,
     service: AvailabilityServiceDependency,
+    day: Annotated[date | datetime | None, Query(alias="date")] = None,
 ) -> list[AvailabilitySlot]:
     try:
-        return service.get_free_slots(current_user, adviser_id)
+        return service.get_free_slots(current_user, adviser_id, day)
     except (
         AvailabilityForbiddenError,
         AvailabilityNotFoundError,

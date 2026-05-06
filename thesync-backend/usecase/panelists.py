@@ -5,8 +5,8 @@ from uuid import UUID
 
 from model.auth import AuthenticatedUser
 from model.panelist import (
-    PanelistAssignment,
     PanelistAssignmentCreateRequest,
+    PanelistAssignmentResponse,
     PanelistInviteResponseRequest,
 )
 
@@ -43,7 +43,7 @@ class PanelistService(Protocol):
         current_user: AuthenticatedUser,
         schedule_id: UUID,
         payload: PanelistAssignmentCreateRequest,
-    ) -> PanelistAssignment: ...
+    ) -> PanelistAssignmentResponse: ...
 
     def respond_to_invite(
         self,
@@ -51,7 +51,7 @@ class PanelistService(Protocol):
         schedule_id: UUID,
         panelist_id: UUID,
         payload: PanelistInviteResponseRequest,
-    ) -> PanelistAssignment: ...
+    ) -> PanelistAssignmentResponse: ...
 
     def remove_panelist(
         self,
