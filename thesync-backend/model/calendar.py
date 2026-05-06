@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import ConfigDict, EmailStr, field_validator
 
@@ -60,3 +61,38 @@ class GoogleCalendarEvent(DomainModel):
     @classmethod
     def normalize_text_fields(cls, value: str | None) -> str | None:
         return normalize_optional_text(value)
+
+
+class GoogleCalendarOverlaySource(DomainModel):
+    """Selectable connected Google Calendar source for overlay views."""
+
+    user_id: UUID
+    full_name: NonEmptyText
+    role_name: NonEmptyText
+    google_email: EmailStr
+
+    @field_validator("role_name", mode="before")
+    @classmethod
+    def normalize_role_name(cls, value: str) -> str:
+        normalized = normalize_optional_text(value)
+        if normalized is None:
+            raise ValueError("role_name must not be empty.")
+
+        return normalized.lower()
+
+
+class GoogleCalendarOverlayEvent(GoogleCalendarEvent):
+    """Google Calendar event annotated with its calendar owner."""
+
+    source_user_id: UUID
+    source_full_name: NonEmptyText
+    source_role_name: NonEmptyText
+
+    @field_validator("source_full_name", "source_role_name", mode="before")
+    @classmethod
+    def normalize_source_text_fields(cls, value: str) -> str:
+        normalized = normalize_optional_text(value)
+        if normalized is None:
+            raise ValueError("overlay source fields must not be empty.")
+
+        return normalized

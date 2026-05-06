@@ -8,10 +8,13 @@ import {
   ChevronRight,
   Clock3,
   FileText,
+  Layers3,
+  Plus,
   UserRound,
   X,
 } from "lucide-react";
 
+import { SearchInput } from "@/components/data-display";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -38,7 +42,12 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAdvisers } from "@/hooks/useAdvisers";
+import {
+  useCalendarOverlayEvents,
+  useCalendarOverlaySources,
+} from "@/hooks/useCalendarOverlay";
 import { useCreateSchedule } from "@/hooks/useSchedules";
+import type { GoogleCalendarOverlaySource } from "@/lib/calendar/backend";
 import {
   buildScheduledAtIso,
   parseConsultationRequestError,
@@ -50,7 +59,14 @@ import { cn } from "@/lib/utils";
 
 type CalendarView = "month" | "week";
 type CalendarPortalRole = "student" | "adviser";
-type CalendarEventTone = "brand" | "violet";
+type CalendarOwnerRole = "student" | "adviser" | "admin";
+type CalendarEventTone =
+  | "brand"
+  | "violet"
+  | "emerald"
+  | "amber"
+  | "rose"
+  | "teal";
 type CalendarEventStatus = "approved" | "pending";
 type CalendarEventType = "consultation" | "defense";
 
@@ -58,6 +74,10 @@ type CalendarEvent = {
   id: string;
   startsAt: Date;
   durationHours: number;
+  ownerId: string;
+  ownerName: string;
+  ownerRole: CalendarOwnerRole;
+  isPrimaryCalendar: boolean;
   status: CalendarEventStatus;
   title: string;
   tone: CalendarEventTone;
@@ -68,6 +88,10 @@ export type PortalCalendarEvent = {
   id: string;
   startsAt: string;
   durationHours: number;
+  ownerId: string;
+  ownerName: string;
+  ownerRole: CalendarOwnerRole;
+  isPrimaryCalendar?: boolean;
   status: CalendarEventStatus;
   title: string;
   tone: CalendarEventTone;
@@ -88,6 +112,23 @@ type DragSelection = {
   dayIndex: number;
   startSlotIndex: number;
   endSlotIndex: number;
+};
+
+type CalendarOverlaySelection = {
+  userId: string;
+  fullName: string;
+  roleName: string;
+};
+
+type CalendarVisibilityOption = {
+  userId: string;
+  fullName: string;
+  roleLabel: string;
+};
+
+type WeekEventLayout = {
+  columnIndex: number;
+  columnsInCluster: number;
 };
 
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -120,6 +161,10 @@ const sampleEvents: PortalCalendarEvent[] = [
     id: "chapter-1-review",
     startsAt: new Date(2026, 4, 5, 14, 0).toISOString(),
     durationHours: 1,
+    ownerId: "self",
+    ownerName: "My Calendar",
+    ownerRole: "student",
+    isPrimaryCalendar: true,
     status: "approved",
     title: "Chapter 1 Review",
     tone: "brand",
@@ -129,6 +174,10 @@ const sampleEvents: PortalCalendarEvent[] = [
     id: "methodology-discussion",
     startsAt: new Date(2026, 4, 8, 10, 0).toISOString(),
     durationHours: 1,
+    ownerId: "self",
+    ownerName: "My Calendar",
+    ownerRole: "student",
+    isPrimaryCalendar: true,
     status: "pending",
     title: "Methodology Discussion",
     tone: "brand",
@@ -138,6 +187,10 @@ const sampleEvents: PortalCalendarEvent[] = [
     id: "data-analysis-review",
     startsAt: new Date(2026, 4, 12, 15, 0).toISOString(),
     durationHours: 1,
+    ownerId: "self",
+    ownerName: "My Calendar",
+    ownerRole: "student",
+    isPrimaryCalendar: true,
     status: "approved",
     title: "Data Analysis Review",
     tone: "brand",
@@ -147,6 +200,10 @@ const sampleEvents: PortalCalendarEvent[] = [
     id: "thesis-defense",
     startsAt: new Date(2026, 4, 15, 13, 0).toISOString(),
     durationHours: 1,
+    ownerId: "self",
+    ownerName: "My Calendar",
+    ownerRole: "student",
+    isPrimaryCalendar: true,
     status: "approved",
     title: "Thesis Defense",
     tone: "violet",
@@ -156,6 +213,10 @@ const sampleEvents: PortalCalendarEvent[] = [
     id: "final-revisions",
     startsAt: new Date(2026, 4, 20, 11, 0).toISOString(),
     durationHours: 1,
+    ownerId: "self",
+    ownerName: "My Calendar",
+    ownerRole: "student",
+    isPrimaryCalendar: true,
     status: "pending",
     title: "Final Revisions",
     tone: "brand",
@@ -179,7 +240,36 @@ const eventToneClassNames = {
     weekBlock:
       "border-2 border-brand-subtle bg-surface-card text-content-strong shadow-[0_12px_24px_rgba(45,94,255,0.06)]",
   },
+  emerald: {
+    monthBar: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+    weekBlock:
+      "border-2 border-emerald-200 bg-surface-card text-content-strong shadow-[0_12px_24px_rgba(16,185,129,0.08)]",
+  },
+  amber: {
+    monthBar: "border border-amber-200 bg-amber-50 text-amber-700",
+    weekBlock:
+      "border-2 border-amber-200 bg-surface-card text-content-strong shadow-[0_12px_24px_rgba(245,158,11,0.08)]",
+  },
+  rose: {
+    monthBar: "border border-rose-200 bg-rose-50 text-rose-700",
+    weekBlock:
+      "border-2 border-rose-200 bg-surface-card text-content-strong shadow-[0_12px_24px_rgba(244,63,94,0.08)]",
+  },
+  teal: {
+    monthBar: "border border-teal-200 bg-teal-50 text-teal-700",
+    weekBlock:
+      "border-2 border-teal-200 bg-surface-card text-content-strong shadow-[0_12px_24px_rgba(20,184,166,0.08)]",
+  },
 } as const;
+
+const overlayTonePalette: CalendarEventTone[] = [
+  "brand",
+  "violet",
+  "emerald",
+  "amber",
+  "rose",
+  "teal",
+];
 
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -316,6 +406,40 @@ function getEventTimeRange(event: CalendarEvent) {
   )}`;
 }
 
+function getRoleLabel(role: CalendarOwnerRole) {
+  return role === "adviser"
+    ? "Adviser"
+    : role === "student"
+      ? "Student"
+      : "Admin";
+}
+
+function getOwnerInitials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+function getLegendDotClassName(tone: CalendarEventTone) {
+  switch (tone) {
+    case "violet":
+      return "bg-violet";
+    case "emerald":
+      return "bg-emerald-500";
+    case "amber":
+      return "bg-amber-500";
+    case "rose":
+      return "bg-rose-500";
+    case "teal":
+      return "bg-teal-500";
+    default:
+      return "bg-brand";
+  }
+}
+
 function getCompactEventTimeLabel(date: Date) {
   const hours = date.getHours();
   const minutes = date.getMinutes();
@@ -342,6 +466,140 @@ function getWeekEvents(date: Date, events: CalendarEvent[]) {
   return events.filter((event) => {
     return event.startsAt >= weekStart && event.startsAt < weekEnd;
   });
+}
+
+function mapOverlaySourceToEventTone(
+  ownerId: string,
+  ownerIds: string[],
+  fallbackTone: CalendarEventTone,
+) {
+  const sourceIndex = ownerIds.indexOf(ownerId);
+  if (sourceIndex === -1) {
+    return fallbackTone;
+  }
+
+  return overlayTonePalette[sourceIndex % overlayTonePalette.length];
+}
+
+function buildOverlayCalendarPortalEvents(
+  overlayEvents: {
+    event_id: string;
+    summary: string | null;
+    status: string;
+    starts_at: string | null;
+    ends_at: string | null;
+    source_user_id: string;
+    source_full_name: string;
+    source_role_name: string;
+  }[],
+) {
+  return overlayEvents
+    .map<PortalCalendarEvent | null>((event) => {
+      const startsAt = event.starts_at ?? null;
+      if (!startsAt) {
+        return null;
+      }
+
+      const endsAt = event.ends_at ?? startsAt;
+      const durationMs =
+        new Date(endsAt).getTime() - new Date(startsAt).getTime();
+      const durationHours = Math.max(
+        0.5,
+        Math.round(durationMs / (1000 * 60 * 30) || 2) / 2,
+      );
+      const title = event.summary?.trim() || "Google Calendar Event";
+      const isDefense = title.toLowerCase().includes("defense");
+      const normalizedRole = event.source_role_name.trim().toLowerCase();
+      const ownerRole: CalendarOwnerRole =
+        normalizedRole === "adviser"
+          ? "adviser"
+          : normalizedRole === "admin"
+            ? "admin"
+            : "student";
+
+      return {
+        id: `${event.source_user_id}:${event.event_id}`,
+        startsAt,
+        durationHours,
+        ownerId: event.source_user_id,
+        ownerName: event.source_full_name,
+        ownerRole,
+        isPrimaryCalendar: false,
+        status: event.status === "confirmed" ? "approved" : "pending",
+        title,
+        tone: isDefense ? "violet" : "brand",
+        type: isDefense ? "defense" : "consultation",
+      } satisfies PortalCalendarEvent;
+    })
+    .filter((event): event is PortalCalendarEvent => event !== null);
+}
+
+function getWeekEventLayouts(weekDays: Date[], weekEvents: CalendarEvent[]) {
+  const layouts = new Map<string, WeekEventLayout>();
+
+  for (const day of weekDays) {
+    const dayEvents = weekEvents
+      .filter((event) => isSameDay(day, event.startsAt))
+      .sort((left, right) => {
+        const delta = left.startsAt.getTime() - right.startsAt.getTime();
+        if (delta !== 0) {
+          return delta;
+        }
+
+        return getEventEndMinutes(left) - getEventEndMinutes(right);
+      });
+
+    let active: Array<{
+      eventId: string;
+      endMinutes: number;
+      columnIndex: number;
+    }> = [];
+    let currentCluster: Array<{ eventId: string; columnIndex: number }> = [];
+    let currentClusterColumns = 1;
+
+    const finalizeCluster = () => {
+      for (const item of currentCluster) {
+        layouts.set(item.eventId, {
+          columnIndex: item.columnIndex,
+          columnsInCluster: currentClusterColumns,
+        });
+      }
+      currentCluster = [];
+      currentClusterColumns = 1;
+    };
+
+    for (const event of dayEvents) {
+      const eventStartMinutes = getEventStartMinutes(event);
+      active = active.filter((item) => item.endMinutes > eventStartMinutes);
+
+      if (active.length === 0 && currentCluster.length > 0) {
+        finalizeCluster();
+      }
+
+      const usedColumns = new Set(active.map((item) => item.columnIndex));
+      let columnIndex = 0;
+      while (usedColumns.has(columnIndex)) {
+        columnIndex += 1;
+      }
+
+      active.push({
+        eventId: event.id,
+        endMinutes: getEventEndMinutes(event),
+        columnIndex,
+      });
+      currentCluster.push({
+        eventId: event.id,
+        columnIndex,
+      });
+      currentClusterColumns = Math.max(currentClusterColumns, active.length);
+    }
+
+    if (currentCluster.length > 0) {
+      finalizeCluster();
+    }
+  }
+
+  return layouts;
 }
 
 function getWeekSlotIndex(date: Date, startMinutes: number, slotCount: number) {
@@ -392,9 +650,13 @@ function buildSlotDate(
 
 export function PortalCalendarView({
   portalRole = "student",
+  primaryCalendarLabel = "My Calendar",
+  primaryCalendarOwnerId = "self",
   events = sampleEvents,
 }: {
   portalRole?: CalendarPortalRole;
+  primaryCalendarLabel?: string;
+  primaryCalendarOwnerId?: string;
   events?: PortalCalendarEvent[];
 }) {
   const [view, setView] = useState<CalendarView>("month");
@@ -402,9 +664,41 @@ export function PortalCalendarView({
   const [requestDraft, setRequestDraft] = useState<RequestDraft | null>(null);
   const [selectedWeekEvent, setSelectedWeekEvent] =
     useState<CalendarEvent | null>(null);
+  const [overlayDialogOpen, setOverlayDialogOpen] = useState(false);
+  const [overlaySearch, setOverlaySearch] = useState("");
+  const [selectedOverlayCalendars, setSelectedOverlayCalendars] = useState<
+    CalendarOverlaySelection[]
+  >([]);
+  const [hiddenWeekCalendarIds, setHiddenWeekCalendarIds] = useState<string[]>(
+    [],
+  );
+  const overlayEnabled = portalRole === "student";
+  const overlaySourcesQuery = useCalendarOverlaySources(overlayEnabled);
+  const overlayEventsQuery = useCalendarOverlayEvents(
+    selectedOverlayCalendars.map((calendar) => calendar.userId),
+    overlayEnabled,
+  );
+  const overlayPortalEvents = useMemo(
+    () => buildOverlayCalendarPortalEvents(overlayEventsQuery.data ?? []),
+    [overlayEventsQuery.data],
+  );
+  const overlayToneOwnerIds = useMemo(
+    () =>
+      selectedOverlayCalendars.length > 0
+        ? [
+            primaryCalendarOwnerId,
+            ...selectedOverlayCalendars.map((calendar) => calendar.userId),
+          ]
+        : [],
+    [primaryCalendarOwnerId, selectedOverlayCalendars],
+  );
+  const mergedPortalEvents = useMemo(
+    () => [...events, ...overlayPortalEvents],
+    [events, overlayPortalEvents],
+  );
   const calendarEvents = useMemo<CalendarEvent[]>(
     () =>
-      events
+      mergedPortalEvents
         .map((event) => {
           const startsAt = parsePortalEventDate(event.startsAt);
 
@@ -415,10 +709,100 @@ export function PortalCalendarView({
           return {
             ...event,
             startsAt,
+            isPrimaryCalendar: event.isPrimaryCalendar ?? false,
+            tone: mapOverlaySourceToEventTone(
+              event.ownerId,
+              overlayToneOwnerIds,
+              event.tone,
+            ),
           };
         })
         .filter((event): event is CalendarEvent => event !== null),
-    [events],
+    [mergedPortalEvents, overlayToneOwnerIds],
+  );
+  const selectedCalendarToneMap = useMemo(() => {
+    const baseEntries = overlayToneOwnerIds.map(
+      (ownerId, index) =>
+        [
+          ownerId,
+          overlayTonePalette[index % overlayTonePalette.length],
+        ] as const,
+    );
+    const eventEntries = calendarEvents.map(
+      (event) => [event.ownerId, event.tone] as const,
+    );
+    const entries = baseEntries.length > 0 ? baseEntries : eventEntries;
+    return new Map<string, CalendarEventTone>(entries);
+  }, [calendarEvents, overlayToneOwnerIds]);
+  const filteredOverlaySources = useMemo(() => {
+    const search = overlaySearch.trim().toLowerCase();
+    const sources = overlaySourcesQuery.data ?? [];
+
+    return sources.filter((source) => {
+      if (
+        selectedOverlayCalendars.some((item) => item.userId === source.user_id)
+      ) {
+        return false;
+      }
+
+      if (!search) {
+        return true;
+      }
+
+      return [source.full_name, source.role_name, source.google_email]
+        .join(" ")
+        .toLowerCase()
+        .includes(search);
+    });
+  }, [overlaySearch, overlaySourcesQuery.data, selectedOverlayCalendars]);
+  const weekVisibilityOptions = useMemo<CalendarVisibilityOption[]>(
+    () => [
+      {
+        userId: primaryCalendarOwnerId,
+        fullName: primaryCalendarLabel,
+        roleLabel: getRoleLabel(
+          portalRole === "adviser" ? "adviser" : "student",
+        ),
+      },
+      ...selectedOverlayCalendars.map((calendar) => ({
+        userId: calendar.userId,
+        fullName: calendar.fullName,
+        roleLabel:
+          calendar.roleName.trim().toLowerCase() === "adviser"
+            ? "Adviser"
+            : calendar.roleName.trim().toLowerCase() === "admin"
+              ? "Admin"
+              : "Student",
+      })),
+    ],
+    [
+      portalRole,
+      primaryCalendarLabel,
+      primaryCalendarOwnerId,
+      selectedOverlayCalendars,
+    ],
+  );
+  const availableWeekCalendarIds = useMemo(
+    () => new Set(weekVisibilityOptions.map((option) => option.userId)),
+    [weekVisibilityOptions],
+  );
+  const effectiveHiddenWeekCalendarIds = useMemo(
+    () =>
+      hiddenWeekCalendarIds.filter((userId) =>
+        availableWeekCalendarIds.has(userId),
+      ),
+    [availableWeekCalendarIds, hiddenWeekCalendarIds],
+  );
+  const visibleWeekCalendarIds = useMemo(
+    () =>
+      new Set(
+        weekVisibilityOptions
+          .filter(
+            (option) => !effectiveHiddenWeekCalendarIds.includes(option.userId),
+          )
+          .map((option) => option.userId),
+      ),
+    [effectiveHiddenWeekCalendarIds, weekVisibilityOptions],
   );
 
   const monthCells = getMonthCells(focusDate);
@@ -438,7 +822,10 @@ export function PortalCalendarView({
   const weekDays = Array.from({ length: 7 }, (_, index) =>
     addDays(weekStart, index),
   );
-  const weekEvents = getWeekEvents(focusDate, calendarEvents);
+  const allWeekEvents = getWeekEvents(focusDate, calendarEvents);
+  const weekEvents = allWeekEvents.filter((event) =>
+    visibleWeekCalendarIds.has(event.ownerId),
+  );
   const focusedDayEvents =
     monthEventMap.get(getEventDayKey(startOfDay(focusDate))) ?? [];
   const approvedCount = monthEvents.filter(
@@ -448,6 +835,37 @@ export function PortalCalendarView({
     (event) => event.status === "pending",
   ).length;
   const canCreateRequests = portalRole === "student";
+
+  function handleAddOverlayCalendar(source: GoogleCalendarOverlaySource) {
+    setSelectedOverlayCalendars((current) => [
+      ...current,
+      {
+        userId: source.user_id,
+        fullName: source.full_name,
+        roleName: source.role_name,
+      },
+    ]);
+  }
+
+  function handleRemoveOverlayCalendar(userId: string) {
+    setSelectedOverlayCalendars((current) =>
+      current.filter((calendar) => calendar.userId !== userId),
+    );
+  }
+
+  function handleToggleWeekCalendar(userId: string, visible: boolean) {
+    setHiddenWeekCalendarIds((current) => {
+      if (visible) {
+        return current.filter((id) => id !== userId);
+      }
+
+      if (current.includes(userId)) {
+        return current;
+      }
+
+      return [...current, userId];
+    });
+  }
 
   function handleNavigate(direction: -1 | 1) {
     if (view === "month") {
@@ -492,7 +910,15 @@ export function PortalCalendarView({
                 approvedCount={approvedCount}
                 focusedDayEvents={focusedDayEvents}
                 focusDate={focusDate}
+                overlayCalendars={selectedOverlayCalendars}
+                overlayError={overlayEventsQuery.error?.message ?? null}
+                overlayEnabled={overlayEnabled}
                 pendingCount={pendingCount}
+                primaryCalendarLabel={primaryCalendarLabel}
+                primaryCalendarOwnerId={primaryCalendarOwnerId}
+                onAddCalendar={() => setOverlayDialogOpen(true)}
+                onRemoveOverlayCalendar={handleRemoveOverlayCalendar}
+                selectedCalendarToneMap={selectedCalendarToneMap}
                 totalEvents={monthEvents.length}
               />
             </div>
@@ -515,6 +941,18 @@ export function PortalCalendarView({
             onNavigate={handleNavigate}
             view={view}
           >
+            {overlayEnabled ? (
+              <WeekCalendarVisibilityBar
+                options={weekVisibilityOptions}
+                overlayError={overlayEventsQuery.error?.message ?? null}
+                primaryCalendarOwnerId={primaryCalendarOwnerId}
+                selectedCalendarToneMap={selectedCalendarToneMap}
+                visibleCalendarIds={visibleWeekCalendarIds}
+                onAddCalendar={() => setOverlayDialogOpen(true)}
+                onToggle={handleToggleWeekCalendar}
+              />
+            ) : null}
+
             <WeekGrid
               canCreateRequests={canCreateRequests}
               focusDate={focusDate}
@@ -546,6 +984,17 @@ export function PortalCalendarView({
             setSelectedWeekEvent(null);
           }
         }}
+      />
+
+      <AddCalendarOverlayDialog
+        calendars={filteredOverlaySources}
+        isLoading={overlaySourcesQuery.isLoading}
+        open={overlayDialogOpen}
+        searchValue={overlaySearch}
+        selectedCount={selectedOverlayCalendars.length}
+        onOpenChange={setOverlayDialogOpen}
+        onSearchChange={setOverlaySearch}
+        onSelectCalendar={handleAddOverlayCalendar}
       />
     </>
   );
@@ -631,6 +1080,321 @@ function ViewToggle({
   );
 }
 
+function CalendarOverlayLegend({
+  overlayCalendars,
+  onRemove,
+  primaryCalendarLabel,
+  primaryCalendarOwnerId,
+  toneMap,
+}: {
+  overlayCalendars: CalendarOverlaySelection[];
+  onRemove: (userId: string) => void;
+  primaryCalendarLabel: string;
+  primaryCalendarOwnerId: string;
+  toneMap: Map<string, CalendarEventTone>;
+}) {
+  const hasOverlayCalendars = overlayCalendars.length > 0;
+
+  return (
+    <div className="flex w-full flex-wrap items-center gap-2">
+      <div className="inline-flex items-center gap-2 rounded-full border border-brand-subtle bg-surface-card px-3 py-1.5 text-body-sm text-content-strong">
+        <span
+          className={cn(
+            "size-2.5 rounded-full",
+            getLegendDotClassName(
+              toneMap.get(primaryCalendarOwnerId) ?? "brand",
+            ),
+          )}
+        />
+        {primaryCalendarLabel}
+      </div>
+
+      {overlayCalendars.map((calendar) => (
+        <div
+          key={calendar.userId}
+          className="inline-flex items-center gap-2 rounded-full border border-brand-subtle bg-surface-card px-3 py-1.5 text-body-sm text-content-strong"
+        >
+          <span
+            className={cn(
+              "size-2.5 rounded-full",
+              getLegendDotClassName(toneMap.get(calendar.userId) ?? "violet"),
+            )}
+          />
+          <span className="truncate">{calendar.fullName}</span>
+          <button
+            type="button"
+            aria-label={`Remove ${calendar.fullName} calendar`}
+            onClick={() => onRemove(calendar.userId)}
+            className="rounded-full p-0.5 text-content-muted transition-colors hover:bg-surface-muted-soft hover:text-content-strong"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      ))}
+
+      {hasOverlayCalendars ? (
+        <span className="text-body-sm text-content-muted">
+          {overlayCalendars.length + 1} calendars shown
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function CalendarOverlayRailCard({
+  overlayCalendars,
+  overlayError,
+  primaryCalendarLabel,
+  primaryCalendarOwnerId,
+  selectedCalendarToneMap,
+  onAddCalendar,
+  onRemoveOverlayCalendar,
+}: {
+  overlayCalendars: CalendarOverlaySelection[];
+  overlayError: string | null;
+  primaryCalendarLabel: string;
+  primaryCalendarOwnerId: string;
+  selectedCalendarToneMap: Map<string, CalendarEventTone>;
+  onAddCalendar: () => void;
+  onRemoveOverlayCalendar: (userId: string) => void;
+}) {
+  return (
+    <Card className="gap-0 rounded-[2rem] border-brand-subtle py-0 shadow-elevated">
+      <CardHeader className="border-b border-surface px-5 py-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-section-title">Calendar Layers</h2>
+            <p className="mt-1 text-body-sm text-content-muted">
+              Compare adviser and student schedules in one calendar.
+            </p>
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 rounded-[0.95rem] border-brand-subtle bg-surface-card px-3"
+            onClick={onAddCalendar}
+          >
+            <Plus data-icon="inline-start" className="size-4" />
+            Add
+          </Button>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4 px-5 py-5">
+        <CalendarOverlayLegend
+          overlayCalendars={overlayCalendars}
+          onRemove={onRemoveOverlayCalendar}
+          primaryCalendarLabel={primaryCalendarLabel}
+          primaryCalendarOwnerId={primaryCalendarOwnerId}
+          toneMap={selectedCalendarToneMap}
+        />
+
+        <div className="rounded-[1rem] border border-surface bg-surface-muted-soft px-4 py-3 text-body-sm text-content-muted">
+          {overlayCalendars.length > 0
+            ? `${overlayCalendars.length + 1} calendars are currently layered in this view.`
+            : "Only your calendar is currently shown."}
+        </div>
+
+        {overlayError ? (
+          <div className="rounded-[1rem] border border-destructive/20 bg-destructive/10 px-4 py-3 text-body-sm text-destructive">
+            {overlayError}
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function WeekCalendarVisibilityBar({
+  options,
+  overlayError,
+  primaryCalendarOwnerId,
+  selectedCalendarToneMap,
+  visibleCalendarIds,
+  onAddCalendar,
+  onToggle,
+}: {
+  options: CalendarVisibilityOption[];
+  overlayError: string | null;
+  primaryCalendarOwnerId: string;
+  selectedCalendarToneMap: Map<string, CalendarEventTone>;
+  visibleCalendarIds: Set<string>;
+  onAddCalendar: () => void;
+  onToggle: (userId: string, visible: boolean) => void;
+}) {
+  return (
+    <div className="mb-5 rounded-[1.35rem] border border-surface bg-surface-muted-soft px-4 py-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <div className="text-[0.82rem] font-semibold tracking-[0.04em] text-content-muted uppercase">
+            Show In Week View
+          </div>
+          <p className="text-body-sm text-content-muted">
+            Choose which calendars stay visible while keeping overlapping events
+            side by side.
+          </p>
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="h-10 rounded-[0.95rem] border-brand-subtle bg-surface-card px-3"
+          onClick={onAddCalendar}
+        >
+          <Plus data-icon="inline-start" className="size-4" />
+          Add Calendar
+        </Button>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-3">
+        {options.map((option) => {
+          const visible = visibleCalendarIds.has(option.userId);
+          const tone =
+            selectedCalendarToneMap.get(option.userId) ??
+            (option.userId === primaryCalendarOwnerId ? "brand" : "violet");
+
+          return (
+            <label
+              key={option.userId}
+              className={cn(
+                "flex min-w-[13rem] cursor-pointer items-start gap-3 rounded-[1rem] border px-3 py-3 transition-colors",
+                visible
+                  ? "border-brand-subtle bg-surface-card"
+                  : "border-surface bg-surface-card/65",
+              )}
+            >
+              <Checkbox
+                checked={visible}
+                onCheckedChange={(value) =>
+                  onToggle(option.userId, Boolean(value))
+                }
+                className="mt-0.5"
+              />
+
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "size-2.5 shrink-0 rounded-full",
+                      getLegendDotClassName(tone),
+                    )}
+                  />
+                  <span className="truncate text-body font-medium text-content-strong">
+                    {option.fullName}
+                  </span>
+                </div>
+                <div className="mt-1 text-body-sm text-content-muted">
+                  {option.roleLabel}
+                </div>
+              </div>
+            </label>
+          );
+        })}
+      </div>
+
+      {overlayError ? (
+        <div className="mt-4 rounded-[1rem] border border-destructive/20 bg-destructive/10 px-4 py-3 text-body-sm text-destructive">
+          {overlayError}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AddCalendarOverlayDialog({
+  calendars,
+  isLoading,
+  open,
+  searchValue,
+  selectedCount,
+  onOpenChange,
+  onSearchChange,
+  onSelectCalendar,
+}: {
+  calendars: GoogleCalendarOverlaySource[];
+  isLoading: boolean;
+  open: boolean;
+  searchValue: string;
+  selectedCount: number;
+  onOpenChange: (open: boolean) => void;
+  onSearchChange: (value: string) => void;
+  onSelectCalendar: (source: GoogleCalendarOverlaySource) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl border border-brand-subtle bg-surface-card">
+        <DialogHeader className="border-b border-surface pb-5">
+          <DialogTitle className="flex items-center gap-2">
+            <Layers3 className="size-5" />
+            Add Calendar Overlay
+          </DialogTitle>
+          <DialogDescription className="text-content-muted">
+            Choose other connected student or adviser calendars to compare in
+            the same month and week view.
+          </DialogDescription>
+        </DialogHeader>
+
+        <DialogBody className="space-y-5 py-6">
+          <SearchInput
+            value={searchValue}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="Search by name, role, or email"
+            className="h-11 rounded-[0.95rem]"
+          />
+
+          <div className="rounded-[1rem] border border-surface bg-surface-muted-soft px-4 py-3 text-body-sm text-content-muted">
+            {selectedCount > 0
+              ? `${selectedCount} additional calendars selected.`
+              : "No additional calendars selected yet."}
+          </div>
+
+          <div className="max-h-[24rem] space-y-3 overflow-y-auto pr-1">
+            {isLoading ? (
+              <div className="rounded-[1rem] border border-surface bg-surface-muted-soft px-4 py-4 text-body-sm text-content-muted">
+                Loading connected calendars...
+              </div>
+            ) : calendars.length > 0 ? (
+              calendars.map((calendar) => (
+                <button
+                  key={calendar.user_id}
+                  type="button"
+                  onClick={() => onSelectCalendar(calendar)}
+                  className="flex w-full items-start gap-3 rounded-[1rem] border border-surface bg-surface-card px-4 py-4 text-left transition-colors hover:border-brand-subtle hover:bg-surface-muted-soft"
+                >
+                  <Checkbox checked={false} aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-label">{calendar.full_name}</span>
+                      <Badge
+                        variant={
+                          calendar.role_name === "adviser"
+                            ? "info"
+                            : "secondary"
+                        }
+                        className="capitalize"
+                      >
+                        {calendar.role_name}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-body-sm text-content-muted">
+                      {calendar.google_email}
+                    </p>
+                  </div>
+                </button>
+              ))
+            ) : (
+              <div className="rounded-[1rem] border border-surface bg-surface-muted-soft px-4 py-4 text-body-sm text-content-muted">
+                No connected calendars match your search.
+              </div>
+            )}
+          </div>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function MonthGrid({
   eventsByDay,
   focusDate,
@@ -698,7 +1462,9 @@ function MonthGrid({
                           eventToneClassNames[event.tone].monthBar,
                         )}
                       >
-                        {timeFormatter.format(event.startsAt)}
+                        {events.length > 1
+                          ? `${getOwnerInitials(event.ownerName)} · ${timeFormatter.format(event.startsAt)}`
+                          : timeFormatter.format(event.startsAt)}
                       </div>
                     ))}
                   </div>
@@ -763,6 +1529,10 @@ function WeekGrid({
       weekTimeSlots: buildWeekTimeSlots(startMinutes, endMinutes),
     };
   }, [timedWeekEvents]);
+  const weekEventLayouts = useMemo(
+    () => getWeekEventLayouts(weekDays, timedWeekEvents),
+    [timedWeekEvents, weekDays],
+  );
   const gridStyle = {
     gridTemplateColumns: "9rem repeat(7, minmax(8.5rem, 1fr))",
     gridTemplateRows: `3.9rem 3.25rem repeat(${weekTimeSlots.length}, 1.875rem)`,
@@ -967,7 +1737,9 @@ function WeekGrid({
                           eventToneClassNames[event.tone].monthBar,
                         )}
                       >
-                        {event.title}
+                        {dayAllDayEvents.length > 1
+                          ? `${getOwnerInitials(event.ownerName)} · ${event.title}`
+                          : event.title}
                       </button>
                     ))
                   ) : (
@@ -1056,6 +1828,22 @@ function WeekGrid({
             }
 
             const isCompactEvent = event.durationHours <= 1;
+            const layout = weekEventLayouts.get(event.id) ?? {
+              columnIndex: 0,
+              columnsInCluster: 1,
+            };
+            const horizontalGapPx = 6;
+            const horizontalInsetRem = 0.4;
+            const clusterGapWidthPx =
+              (layout.columnsInCluster - 1) * horizontalGapPx;
+            const widthStyle =
+              layout.columnsInCluster > 1
+                ? `calc((100% - ${horizontalInsetRem * 2}rem - ${clusterGapWidthPx}px) / ${layout.columnsInCluster})`
+                : `calc(100% - ${horizontalInsetRem * 2}rem)`;
+            const marginLeftStyle =
+              layout.columnsInCluster > 1
+                ? `calc(${horizontalInsetRem}rem + ${layout.columnIndex} * ((100% - ${horizontalInsetRem * 2}rem - ${clusterGapWidthPx}px) / ${layout.columnsInCluster} + ${horizontalGapPx}px))`
+                : `${horizontalInsetRem}rem`;
 
             return (
               <button
@@ -1064,21 +1852,28 @@ function WeekGrid({
                 onClick={() => onEventSelect(event)}
                 title={event.title}
                 className={cn(
-                  "z-10 mx-1 my-1 flex h-[calc(100%-0.5rem)] flex-col justify-between overflow-hidden rounded-[0.8rem] px-2.5 py-2 text-left transition-shadow hover:shadow-[0_14px_28px_rgba(45,94,255,0.1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2",
+                  "z-10 my-1 flex h-[calc(100%-0.5rem)] flex-col justify-between overflow-hidden rounded-[0.8rem] px-2.5 py-2 text-left transition-shadow hover:shadow-[0_14px_28px_rgba(45,94,255,0.1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2",
+                  layout.columnsInCluster > 1 && "px-2 py-1.5",
                   eventToneClassNames[event.tone].weekBlock,
                 )}
                 style={{
                   gridColumnStart: dayIndex + 2,
                   gridRow: `${startRow + 3} / span ${Math.max(1, event.durationHours * 2)}`,
+                  justifySelf: "start",
+                  width: widthStyle,
+                  marginLeft: marginLeftStyle,
                 }}
               >
                 <div className="min-h-0 flex-1 overflow-hidden">
+                  <div className="mb-1 truncate text-[0.62rem] leading-[0.78rem] font-semibold tracking-[0.06em] text-content-muted uppercase">
+                    {event.ownerName}
+                  </div>
                   <div
                     className={cn(
                       "text-content-strong",
                       isCompactEvent
-                        ? "line-clamp-2 text-[0.72rem] leading-[0.84rem] font-medium tracking-[-0.01em]"
-                        : "line-clamp-2 text-[0.82rem] leading-[0.98rem] font-medium tracking-[-0.01em]",
+                        ? "line-clamp-2 text-[0.7rem] leading-[0.82rem] font-medium tracking-[-0.01em]"
+                        : "line-clamp-2 text-[0.8rem] leading-[0.96rem] font-medium tracking-[-0.01em]",
                     )}
                   >
                     {event.title}
@@ -1138,6 +1933,15 @@ function WeekEventDetailsModal({
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-[1rem] border border-surface bg-surface-card px-4 py-4">
                   <div className="text-[0.82rem] font-semibold tracking-[0.04em] text-content-muted uppercase">
+                    Calendar
+                  </div>
+                  <div className="mt-2 text-[0.98rem] font-medium text-content-strong">
+                    {event.ownerName}
+                  </div>
+                </div>
+
+                <div className="rounded-[1rem] border border-surface bg-surface-card px-4 py-4">
+                  <div className="text-[0.82rem] font-semibold tracking-[0.04em] text-content-muted uppercase">
                     Type
                   </div>
                   <div className="mt-2 text-[0.98rem] font-medium text-content-strong">
@@ -1145,7 +1949,7 @@ function WeekEventDetailsModal({
                   </div>
                 </div>
 
-                <div className="rounded-[1rem] border border-surface bg-surface-card px-4 py-4">
+                <div className="rounded-[1rem] border border-surface bg-surface-card px-4 py-4 sm:col-span-2">
                   <div className="text-[0.82rem] font-semibold tracking-[0.04em] text-content-muted uppercase">
                     Status
                   </div>
@@ -1481,13 +2285,29 @@ function MonthDetailsRail({
   approvedCount,
   focusedDayEvents,
   focusDate,
+  overlayCalendars,
+  overlayEnabled,
+  overlayError,
   pendingCount,
+  primaryCalendarLabel,
+  primaryCalendarOwnerId,
+  onAddCalendar,
+  onRemoveOverlayCalendar,
+  selectedCalendarToneMap,
   totalEvents,
 }: {
   approvedCount: number;
   focusedDayEvents: CalendarEvent[];
   focusDate: Date;
+  overlayCalendars: CalendarOverlaySelection[];
+  overlayEnabled: boolean;
+  overlayError: string | null;
   pendingCount: number;
+  primaryCalendarLabel: string;
+  primaryCalendarOwnerId: string;
+  onAddCalendar: () => void;
+  onRemoveOverlayCalendar: (userId: string) => void;
+  selectedCalendarToneMap: Map<string, CalendarEventTone>;
   totalEvents: number;
 }) {
   return (
@@ -1515,6 +2335,9 @@ function MonthDetailsRail({
                   <div>
                     <div className="text-[1.05rem] leading-6 font-semibold text-content-strong">
                       {event.title}
+                    </div>
+                    <div className="mt-1 text-body-sm text-content-muted">
+                      {event.ownerName} · {getRoleLabel(event.ownerRole)}
                     </div>
                     <div className="mt-1 text-body-sm">
                       {timeFormatter.format(event.startsAt)}
@@ -1547,6 +2370,18 @@ function MonthDetailsRail({
           <SnapshotMetric label="Pending" value={String(pendingCount)} />
         </CardContent>
       </Card>
+
+      {overlayEnabled ? (
+        <CalendarOverlayRailCard
+          overlayCalendars={overlayCalendars}
+          overlayError={overlayError}
+          primaryCalendarLabel={primaryCalendarLabel}
+          primaryCalendarOwnerId={primaryCalendarOwnerId}
+          selectedCalendarToneMap={selectedCalendarToneMap}
+          onAddCalendar={onAddCalendar}
+          onRemoveOverlayCalendar={onRemoveOverlayCalendar}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1589,6 +2424,9 @@ function UpcomingEvents({ events }: { events: CalendarEvent[] }) {
                   <div className="text-[1.35rem] leading-7 font-semibold tracking-[-0.03em] text-content-strong">
                     {event.title}
                   </div>
+                  <p className="text-body-sm text-content-muted">
+                    {event.ownerName} · {getRoleLabel(event.ownerRole)}
+                  </p>
                   <p className="text-body-sm">
                     {timeFormatter.format(event.startsAt)}
                   </p>

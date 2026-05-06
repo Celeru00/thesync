@@ -19,6 +19,11 @@ type AdviserCalendarPageProps = {
 
 function mapGoogleEventsToPortalEvents(
   events: Awaited<ReturnType<typeof getServerGoogleCalendarEvents>>,
+  source: {
+    ownerId: string;
+    ownerName: string;
+    ownerRole: "adviser";
+  },
 ): PortalCalendarEvent[] {
   return events.map((event) => {
     const startsAt = event.starts_at ?? new Date().toISOString();
@@ -40,6 +45,10 @@ function mapGoogleEventsToPortalEvents(
       title,
       tone: isDefense ? "violet" : "brand",
       type: isDefense ? "defense" : "consultation",
+      ownerId: source.ownerId,
+      ownerName: source.ownerName,
+      ownerRole: source.ownerRole,
+      isPrimaryCalendar: true,
     };
   });
 }
@@ -47,7 +56,7 @@ function mapGoogleEventsToPortalEvents(
 export default async function AdviserCalendarPage({
   searchParams,
 }: AdviserCalendarPageProps) {
-  await requireAppRole("adviser");
+  const currentUser = await requireAppRole("adviser");
   const connection = await getServerGoogleCalendarConnection();
   const params = await searchParams;
   const calendarStatus = Array.isArray(params.calendar)
@@ -77,7 +86,18 @@ export default async function AdviserCalendarPage({
     );
   }
 
-  const events = mapGoogleEventsToPortalEvents(googleEvents);
+  const events = mapGoogleEventsToPortalEvents(googleEvents, {
+    ownerId: currentUser.id,
+    ownerName: currentUser.full_name,
+    ownerRole: "adviser",
+  });
 
-  return <PortalCalendarView portalRole="adviser" events={events} />;
+  return (
+    <PortalCalendarView
+      portalRole="adviser"
+      events={events}
+      primaryCalendarLabel={currentUser.full_name}
+      primaryCalendarOwnerId={currentUser.id}
+    />
+  );
 }

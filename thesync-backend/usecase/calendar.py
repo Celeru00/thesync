@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from uuid import UUID
 
 from sqlalchemy import select
 
@@ -9,6 +10,8 @@ from model.calendar import (
     GoogleCalendarConnectionStatus,
     GoogleCalendarConnectRequest,
     GoogleCalendarEvent,
+    GoogleCalendarOverlayEvent,
+    GoogleCalendarOverlaySource,
 )
 from repository.database import SessionLocal
 from repository.google_calendar import (
@@ -16,7 +19,10 @@ from repository.google_calendar import (
     GoogleCalendarApiError,
     GoogleCalendarClient,
 )
-from repository.orm import GoogleCalendarConnectionRecord
+from repository.orm import GoogleCalendarConnectionRecord, RoleRecord, UserRecord
+
+OVERLAY_ALLOWED_ROLE_NAMES = ("student", "adviser")
+MAX_OVERLAY_CALENDARS = 8
 
 
 class CalendarIntegrationError(RuntimeError):
@@ -165,3 +171,103 @@ def list_google_calendar_events(
             )
             for event in remote_events
         ]
+
+
+def list_google_calendar_overlay_sources(
+    current_user: AuthenticatedUser,
+) -> list[GoogleCalendarOverlaySource]:
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(UserRecord, RoleRecord, GoogleCalendarConnectionRecord)
+            .join(RoleRecord, RoleRecord.id == UserRecord.role_id)
+            .join(
+                GoogleCalendarConnectionRecord,
+                GoogleCalendarConnectionRecord.user_id == UserRecord.id,
+            )
+            .where(
+                UserRecord.id != current_user.id,
+                UserRecord.registration_completed.is_(True),
+                RoleRecord.name.in_(OVERLAY_ALLOWED_ROLE_NAMES),
+            )
+            .order_by(RoleRecord.name.asc(), UserRecord.full_name.asc())
+        ).all()
+
+        return [
+            GoogleCalendarOverlaySource(
+                user_id=user.id,
+                full_name=user.full_name,
+                role_name=role.name,
+                google_email=connection.google_email,
+            )
+            for user, role, connection in rows
+        ]
+
+
+def list_google_calendar_overlay_events(
+    current_user: AuthenticatedUser,
+    *,
+    user_ids: list[UUID],
+    time_min: datetime | None = None,
+    time_max: datetime | None = None,
+) -> list[GoogleCalendarOverlayEvent]:
+    del current_user
+
+    unique_user_ids = list(dict.fromkeys(user_ids))
+    if not unique_user_ids:
+        return []
+
+    if len(unique_user_ids) > MAX_OVERLAY_CALENDARS:
+        raise CalendarIntegrationError(
+            f"You can compare up to {MAX_OVERLAY_CALENDARS} calendars at a time.",
+            status_code=422,
+        )
+
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(UserRecord, RoleRecord, GoogleCalendarConnectionRecord)
+            .join(RoleRecord, RoleRecord.id == UserRecord.role_id)
+            .join(
+                GoogleCalendarConnectionRecord,
+                GoogleCalendarConnectionRecord.user_id == UserRecord.id,
+            )
+            .where(
+                UserRecord.id.in_(unique_user_ids),
+                UserRecord.registration_completed.is_(True),
+                RoleRecord.name.in_(OVERLAY_ALLOWED_ROLE_NAMES),
+            )
+            .order_by(UserRecord.full_name.asc())
+        ).all()
+
+        overlay_events: list[GoogleCalendarOverlayEvent] = []
+        try:
+            for user, role, connection in rows:
+                client = GoogleCalendarClient(connection)
+                try:
+                    remote_events = client.list_events(time_min=time_min, time_max=time_max)
+                except CalendarSyncConfigurationError as exc:
+                    raise CalendarIntegrationError(
+                        "Google Calendar integration is not configured on the server.",
+                        status_code=503,
+                    ) from exc
+                except GoogleCalendarApiError as exc:
+                    raise _translate_calendar_api_error(exc) from exc
+
+                overlay_events.extend(
+                    GoogleCalendarOverlayEvent(
+                        event_id=event.event_id,
+                        summary=event.summary,
+                        status=event.status or "confirmed",
+                        starts_at=event.starts_at,
+                        ends_at=event.ends_at,
+                        html_link=event.html_link,
+                        meet_link=event.meet_link,
+                        source_user_id=user.id,
+                        source_full_name=user.full_name,
+                        source_role_name=role.name,
+                    )
+                    for event in remote_events
+                )
+        finally:
+            session.commit()
+
+        return overlay_events

@@ -18,6 +18,19 @@ export type GoogleCalendarEvent = {
   meet_link: string | null;
 };
 
+export type GoogleCalendarOverlaySource = {
+  user_id: string;
+  full_name: string;
+  role_name: string;
+  google_email: string;
+};
+
+export type GoogleCalendarOverlayEvent = GoogleCalendarEvent & {
+  source_user_id: string;
+  source_full_name: string;
+  source_role_name: string;
+};
+
 export class BackendCalendarError extends Error {
   status: number;
 
@@ -148,4 +161,59 @@ export async function fetchGoogleCalendarEvents(
   }
 
   return (await response.json()) as GoogleCalendarEvent[];
+}
+
+export async function fetchGoogleCalendarOverlaySources(
+  accessToken: string,
+): Promise<GoogleCalendarOverlaySource[]> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/calendar/google/overlay-sources`,
+    {
+      headers: authorizedHeaders(accessToken),
+      cache: "no-store",
+    },
+  );
+
+  if (!response.ok) {
+    throw await parseBackendCalendarError(response);
+  }
+
+  return (await response.json()) as GoogleCalendarOverlaySource[];
+}
+
+export async function fetchGoogleCalendarOverlayEvents(
+  accessToken: string,
+  userIds: string[],
+  params?: {
+    timeMin?: string;
+    timeMax?: string;
+  },
+): Promise<GoogleCalendarOverlayEvent[]> {
+  const search = new URLSearchParams();
+
+  for (const userId of userIds) {
+    search.append("user_id", userId);
+  }
+
+  if (params?.timeMin) {
+    search.set("time_min", params.timeMin);
+  }
+  if (params?.timeMax) {
+    search.set("time_max", params.timeMax);
+  }
+
+  const query = search.size ? `?${search.toString()}` : "";
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/calendar/google/overlay-events${query}`,
+    {
+      headers: authorizedHeaders(accessToken),
+      cache: "no-store",
+    },
+  );
+
+  if (!response.ok) {
+    throw await parseBackendCalendarError(response);
+  }
+
+  return (await response.json()) as GoogleCalendarOverlayEvent[];
 }

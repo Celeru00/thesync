@@ -13,6 +13,8 @@ from model.calendar import (
     GoogleCalendarConnectionStatus,
     GoogleCalendarConnectRequest,
     GoogleCalendarEvent,
+    GoogleCalendarOverlayEvent,
+    GoogleCalendarOverlaySource,
 )
 from model.dashboard import (
     AdviserDashboardResponse,
@@ -68,6 +70,8 @@ __all__ = [
     "GoogleCalendarConnectionStatus",
     "GoogleCalendarConnectRequest",
     "GoogleCalendarEvent",
+    "GoogleCalendarOverlayEvent",
+    "GoogleCalendarOverlaySource",
     "InviteStatusEnum",
     "InviteStatus",
     "LookupModel",
