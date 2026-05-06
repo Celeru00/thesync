@@ -77,8 +77,8 @@ const departmentOptions = [
   "Department of Biological Sciences and Environmental Studies",
 ] as const;
 
-function isValidUpEmail(email: string) {
-  return email.trim().toLowerCase().endsWith("@up.edu.ph");
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
 export function RegisterFlow({
@@ -131,8 +131,8 @@ export function RegisterFlow({
     profile.department.trim().length > 0;
 
   function handleEmailContinue() {
-    if (!isValidUpEmail(email)) {
-      setEmailError("Email must end with @up.edu.ph");
+    if (!isValidEmail(email)) {
+      setEmailError("Enter a valid email address");
       return;
     }
 
@@ -308,10 +308,10 @@ function EmailStep({
     <section className="space-y-7">
       <div className="space-y-2">
         <h1 className="text-[2rem] leading-[1.12] font-semibold tracking-[-0.04em] text-content-strong">
-          Verify Your UP Email
+          Verify Your Email
         </h1>
         <p className="text-[1.05rem] leading-7 text-content-muted">
-          You&apos;ll need a valid @up.edu.ph email address to register
+          Use the email address you want associated with your account
         </p>
       </div>
 
@@ -321,14 +321,14 @@ function EmailStep({
             htmlFor="signup-email"
             className="text-[1.05rem] font-medium text-content-strong"
           >
-            UP Email Address
+            Email Address
           </Label>
           <Input
             id="signup-email"
             type="email"
             value={email}
             onChange={(event) => onEmailChange(event.target.value)}
-            placeholder="your.name@up.edu.ph"
+            placeholder="your.name@example.com"
             aria-invalid={emailError ? "true" : "false"}
             className="h-12 rounded-[0.95rem] text-base"
           />
@@ -343,9 +343,9 @@ function EmailStep({
 
         <div className="rounded-[0.95rem] border border-card-info bg-card-info px-4 py-4 text-left">
           <p className="text-body text-card-info">
-            <span className="font-semibold">Why @up.edu.ph?</span> TheSync is
-            exclusively for the UP community to ensure secure and verified
-            access.
+            <span className="font-semibold">Email reminder:</span> Make sure you
+            use an email address you can access, since it will be tied to your
+            TheSync account and notifications.
           </p>
         </div>
       </div>

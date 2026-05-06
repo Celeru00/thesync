@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Clock3,
   FileText,
+  LoaderCircle,
   Plus,
   RefreshCcw,
   UserRound,
@@ -16,6 +17,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -23,12 +34,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { useRescheduleSchedule, useSchedules } from "@/hooks/useSchedules";
 import {
   studentAdvisers,
-  studentConsultationRecords,
   type ConsultationRequestStatus,
-  type StudentConsultationRecord,
 } from "@/lib/mock/student-consultations";
+import type { ScheduleListItem } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const statusOptions: Array<{
@@ -40,6 +51,7 @@ const statusOptions: Array<{
   { value: "pending", label: "Pending" },
   { value: "completed", label: "Completed" },
   { value: "rejected", label: "Rejected" },
+  { value: "cancelled", label: "Cancelled" },
 ];
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
@@ -52,14 +64,16 @@ export function StudentConsultationsOverview() {
   const [statusFilter, setStatusFilter] = useState<
     ConsultationRequestStatus | "all"
   >("all");
+  const [rescheduleTarget, setRescheduleTarget] =
+    useState<ScheduleListItem | null>(null);
+  const [rescheduleAt, setRescheduleAt] = useState("");
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
+  const { data, isLoading, error } = useSchedules(
+    statusFilter === "all" ? undefined : { status: statusFilter },
+  );
+  const rescheduleScheduleMutation = useRescheduleSchedule();
 
-  const filteredRecords = studentConsultationRecords.filter((record) => {
-    if (statusFilter === "all") {
-      return true;
-    }
-
-    return record.status === statusFilter;
-  });
+  const records = data?.items ?? [];
 
   return (
     <section className="flex w-full flex-col gap-8">
@@ -104,46 +118,186 @@ export function StudentConsultationsOverview() {
         </CardHeader>
 
         <CardContent className="space-y-4 px-6 py-6 sm:px-7">
-          {filteredRecords.map((record) => (
-            <ConsultationRecordCard key={record.id} record={record} />
-          ))}
+          {isLoading ? (
+            <div className="py-8 text-center text-body text-content-muted">
+              Loading consultations...
+            </div>
+          ) : error ? (
+            <div className="rounded-[1rem] border border-destructive/25 bg-destructive/10 px-4 py-4 text-body text-destructive">
+              We couldn&apos;t load your consultations right now.
+            </div>
+          ) : records.length === 0 ? (
+            <div className="py-8 text-center text-body text-content-muted">
+              No consultations found.
+            </div>
+          ) : (
+            records.map((record) => (
+              <ConsultationRecordCard
+                key={record.id}
+                record={record}
+                isRescheduling={
+                  rescheduleScheduleMutation.isPending &&
+                  rescheduleScheduleMutation.variables?.id === record.id
+                }
+                onReschedule={() => {
+                  setRescheduleTarget(record);
+                  setRescheduleAt(toDateTimeLocalValue(record.scheduled_at));
+                  setRescheduleError(null);
+                }}
+              />
+            ))
+          )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={rescheduleTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRescheduleTarget(null);
+            setRescheduleAt("");
+            setRescheduleError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg border border-brand-subtle bg-surface-card">
+          <DialogHeader>
+            <DialogTitle>Request Reschedule</DialogTitle>
+            <DialogDescription className="text-content-muted">
+              Choose a new date and time for this approved consultation. Your
+              adviser will review the change.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogBody className="space-y-4">
+            {rescheduleTarget ? (
+              <div className="rounded-[1rem] border border-surface bg-surface-muted-soft px-4 py-4">
+                <div className="text-body-sm text-content-muted">
+                  Consultation
+                </div>
+                <div className="mt-1 text-card-title">
+                  {rescheduleTarget.topic}
+                </div>
+                <div className="mt-1 text-body text-content-muted">
+                  {rescheduleTarget.adviser_full_name}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="space-y-2">
+              <label className="text-body font-medium text-content-strong">
+                New Date & Time
+              </label>
+              <Input
+                type="datetime-local"
+                value={rescheduleAt}
+                onChange={(event) => {
+                  setRescheduleAt(event.target.value);
+                  setRescheduleError(null);
+                }}
+                className="h-11 rounded-[0.95rem]"
+              />
+            </div>
+
+            {rescheduleError ? (
+              <div className="rounded-[1rem] border border-destructive/25 bg-destructive/10 px-4 py-3 text-body text-destructive">
+                {rescheduleError}
+              </div>
+            ) : null}
+          </DialogBody>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setRescheduleTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!rescheduleAt || rescheduleScheduleMutation.isPending}
+              onClick={async () => {
+                if (!rescheduleTarget || !rescheduleAt) {
+                  setRescheduleError("Please choose a new date and time.");
+                  return;
+                }
+
+                setRescheduleError(null);
+
+                try {
+                  await rescheduleScheduleMutation.mutateAsync({
+                    id: rescheduleTarget.id,
+                    new_scheduled_at: new Date(rescheduleAt).toISOString(),
+                  });
+                  setRescheduleTarget(null);
+                  setRescheduleAt("");
+                } catch (error) {
+                  setRescheduleError(
+                    error instanceof Error
+                      ? error.message
+                      : "We couldn't send your reschedule request right now.",
+                  );
+                }
+              }}
+            >
+              {rescheduleScheduleMutation.isPending ? (
+                <>
+                  <LoaderCircle className="animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                "Send Request"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
 
 function ConsultationRecordCard({
+  isRescheduling,
+  onReschedule,
   record,
 }: {
-  record: StudentConsultationRecord;
+  isRescheduling: boolean;
+  onReschedule: () => void;
+  record: ScheduleListItem;
 }) {
-  const adviser = studentAdvisers.find((item) => item.id === record.adviserId);
+  const adviser = studentAdvisers.find(
+    (item) => item.name === record.adviser_full_name,
+  );
+  const scheduleDate = parseIsoDate(record.scheduled_at ?? record.requested_at);
+  const scheduleTimeLabel = formatTimeRange(record.scheduled_at);
+  const typeName = normalizeRequestType(record.type_name);
+  const statusName = normalizeRequestStatus(record.status_name);
 
   return (
     <article className="rounded-[1.45rem] border border-surface bg-surface-card px-6 py-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-3">
-            <h3 className="text-subheading">{record.title}</h3>
+            <h3 className="text-subheading">{record.topic}</h3>
             <Badge
               className={cn(
                 "border text-xs",
-                record.type === "consultation"
+                typeName === "consultation"
                   ? "border-brand-subtle bg-primary-tint text-brand-strong"
                   : "border-[#E4D4FF] bg-[#F4EAFF] text-[#7C3AED]",
               )}
             >
-              {record.type === "consultation" ? "Consultation" : "Defense"}
+              {typeName === "consultation" ? "Consultation" : "Defense"}
             </Badge>
           </div>
           <p className="text-[1.05rem] leading-7 text-content-muted">
-            {record.summary}
+            {record.topic}
           </p>
         </div>
 
-        <Badge variant={getStatusVariant(record.status)} className="self-start">
-          {capitalize(record.status)}
+        <Badge variant={getStatusVariant(statusName)} className="self-start">
+          {capitalize(statusName)}
         </Badge>
       </div>
 
@@ -151,31 +305,49 @@ function ConsultationRecordCard({
         <MetadataBlock
           icon={UserRound}
           label="Adviser"
-          value={adviser?.name ?? "Not assigned"}
+          value={adviser?.name ?? record.adviser_full_name ?? "Not assigned"}
         />
         <MetadataBlock
           icon={CalendarDays}
           label="Date"
-          value={dateFormatter.format(parseDate(record.date))}
+          value={dateFormatter.format(scheduleDate)}
         />
-        <MetadataBlock icon={Clock3} label="Time" value={record.timeLabel} />
+        <MetadataBlock icon={Clock3} label="Time" value={scheduleTimeLabel} />
         <MetadataBlock
           icon={FileText}
           label="Type"
-          value={record.type === "consultation" ? "Consultation" : "Defense"}
+          value={typeName === "consultation" ? "Consultation" : "Defense"}
         />
       </div>
 
-      {record.status === "approved" ? (
+      {statusName === "approved" ? (
         <>
           <Separator className="my-6" />
           <div className="flex flex-wrap gap-3">
-            <Button variant="outline" size="sm">
-              <Video />
-              Join Meeting
-            </Button>
-            <Button variant="outline" size="sm">
-              <RefreshCcw />
+            {record.meet_link ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href={record.meet_link} target="_blank" rel="noreferrer">
+                  <Video />
+                  Join Meeting
+                </Link>
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" disabled>
+                <Video />
+                Join Meeting
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onReschedule}
+              disabled={isRescheduling}
+            >
+              {isRescheduling ? (
+                <LoaderCircle className="animate-spin" />
+              ) : (
+                <RefreshCcw />
+              )}
               Request Reschedule
             </Button>
           </div>
@@ -215,6 +387,8 @@ function getStatusVariant(status: ConsultationRequestStatus) {
       return "outline";
     case "rejected":
       return "destructive";
+    case "cancelled":
+      return "secondary";
   }
 }
 
@@ -222,8 +396,66 @@ function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function parseDate(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
+function parseIsoDate(value: string) {
+  const date = new Date(value);
 
-  return new Date(year, month - 1, day);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
+function normalizeRequestStatus(value: string): ConsultationRequestStatus {
+  if (
+    value === "approved" ||
+    value === "pending" ||
+    value === "completed" ||
+    value === "rejected" ||
+    value === "cancelled"
+  ) {
+    return value;
+  }
+
+  return "pending";
+}
+
+function normalizeRequestType(value: string) {
+  return value === "defense" ? "defense" : "consultation";
+}
+
+function formatTimeRange(scheduledAt: string | null) {
+  if (!scheduledAt) {
+    return "Not scheduled";
+  }
+
+  const start = new Date(scheduledAt);
+
+  if (Number.isNaN(start.getTime())) {
+    return "Not scheduled";
+  }
+
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const timeFormatter = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  return `${timeFormatter.format(start)} - ${timeFormatter.format(end)}`;
+}
+
+function toDateTimeLocalValue(value: string | null) {
+  if (!value) {
+    return "";
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const hours = String(parsed.getHours()).padStart(2, "0");
+  const minutes = String(parsed.getMinutes()).padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }

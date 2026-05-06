@@ -71,12 +71,12 @@ export default async function HomePage() {
                   >
                     G
                   </span>
-                  Sign in with UP Email
+                  Sign in with Google
                 </Link>
               </Button>
 
               <p className="mt-3 text-[0.95rem] leading-6 text-content-muted">
-                Requires @up.edu.ph email address
+                Use any Google account to continue
               </p>
             </div>
           </div>

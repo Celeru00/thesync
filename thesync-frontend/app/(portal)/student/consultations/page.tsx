@@ -1,5 +1,5 @@
-import { StudentConsultations } from "@/components/student/consultations";
+import { StudentConsultationsOverview } from "@/components/consultations/student-consultations-overview";
 
 export default function StudentConsultationsPage() {
-  return <StudentConsultations />;
+  return <StudentConsultationsOverview />;
 }

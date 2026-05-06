@@ -54,7 +54,7 @@ def _format_datetime(value: datetime | None) -> str:
 
 
 class DefaultScheduleStatusService(ScheduleStatusService):
-    """Business logic for adviser-driven schedule status transitions."""
+    """Business logic for schedule status transitions."""
 
     def __init__(
         self,
@@ -175,6 +175,26 @@ class DefaultScheduleStatusService(ScheduleStatusService):
             raise ScheduleForbiddenError("Only the assigned adviser can update this schedule.")
 
         return schedule
+
+    def _get_schedule_for_reschedule(
+        self,
+        *,
+        current_user: AuthenticatedUser,
+        schedule_id: UUID,
+    ) -> Schedule:
+        schedule = self.schedule_repository.get_by_id(schedule_id)
+        if schedule is None:
+            raise ScheduleNotFoundError("Schedule was not found.")
+
+        if current_user.app_role == "adviser" and schedule.adviser_id == current_user.id:
+            return schedule
+
+        if current_user.app_role == "student" and schedule.student_id == current_user.id:
+            return schedule
+
+        raise ScheduleForbiddenError(
+            "Only the owning student or assigned adviser can reschedule this schedule."
+        )
 
     def _create_audit_log(
         self,
@@ -333,10 +353,11 @@ class DefaultScheduleStatusService(ScheduleStatusService):
         schedule_id: UUID,
         payload: ScheduleRescheduleRequest,
     ) -> Schedule:
-        schedule = self._get_schedule_for_adviser(
+        schedule = self._get_schedule_for_reschedule(
             current_user=current_user,
             schedule_id=schedule_id,
         )
+        approved_status_id = self._get_required_status_id(APPROVED_STATUS_NAME)
         rejected_status_id = self._get_required_status_id(REJECTED_STATUS_NAME)
         completed_status_id = self._get_required_status_id(COMPLETED_STATUS_NAME)
         cancelled_status_id = self._get_required_status_id(CANCELLED_STATUS_NAME)
@@ -356,6 +377,9 @@ class DefaultScheduleStatusService(ScheduleStatusService):
                 "Rejected, completed, or cancelled schedules cannot be rescheduled."
             )
 
+        if current_user.app_role == "student" and schedule.status_id != approved_status_id:
+            raise ScheduleConflictError("Only approved schedules can be rescheduled by students.")
+
         self.slot_guard.ensure_slot_available(
             adviser_id=schedule.adviser_id,
             scheduled_at=normalized_new_time,
@@ -373,26 +397,49 @@ class DefaultScheduleStatusService(ScheduleStatusService):
             previous_status_id=schedule.status_id,
             new_status_id=rescheduled_status_id,
             remarks=(
-                f"Schedule moved from {_format_datetime(schedule.scheduled_at)} "
-                f"to {_format_datetime(normalized_new_time)}."
+                (
+                    "Student requested reschedule "
+                    if current_user.app_role == "student"
+                    else "Schedule moved "
+                )
+                + f"from {_format_datetime(schedule.scheduled_at)} "
+                + f"to {_format_datetime(normalized_new_time)}."
             ),
         )
-        self._create_notification(
-            user_id=updated_schedule.student_id,
-            schedule_id=updated_schedule.id,
-            message=(
-                f'Your schedule for "{updated_schedule.topic}" was moved to '
-                f"{_format_datetime(updated_schedule.scheduled_at)}."
-            ),
-        )
-        student_email, student_name = self._load_recipient_email_context(
-            updated_schedule.student_id
-        )
-        self.email_service.send_schedule_rescheduled(
-            student_email=student_email,
-            student_name=student_name,
-            adviser_name=current_user.full_name,
-            topic=updated_schedule.topic,
-            scheduled_at=updated_schedule.scheduled_at,
-        )
+        if current_user.app_role == "student":
+            self._create_notification(
+                user_id=updated_schedule.student_id,
+                schedule_id=updated_schedule.id,
+                message=(
+                    f'You requested to move "{updated_schedule.topic}" to '
+                    f"{_format_datetime(updated_schedule.scheduled_at)}."
+                ),
+            )
+            self._create_notification(
+                user_id=updated_schedule.adviser_id,
+                schedule_id=updated_schedule.id,
+                message=(
+                    f'{current_user.full_name} requested to move "{updated_schedule.topic}" to '
+                    f"{_format_datetime(updated_schedule.scheduled_at)}."
+                ),
+            )
+        else:
+            self._create_notification(
+                user_id=updated_schedule.student_id,
+                schedule_id=updated_schedule.id,
+                message=(
+                    f'Your schedule for "{updated_schedule.topic}" was moved to '
+                    f"{_format_datetime(updated_schedule.scheduled_at)}."
+                ),
+            )
+            student_email, student_name = self._load_recipient_email_context(
+                updated_schedule.student_id
+            )
+            self.email_service.send_schedule_rescheduled(
+                student_email=student_email,
+                student_name=student_name,
+                adviser_name=current_user.full_name,
+                topic=updated_schedule.topic,
+                scheduled_at=updated_schedule.scheduled_at,
+            )
         return updated_schedule

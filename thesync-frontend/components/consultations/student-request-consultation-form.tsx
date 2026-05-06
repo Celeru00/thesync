@@ -10,6 +10,7 @@ import {
   Clock3,
   FileText,
   Info,
+  LoaderCircle,
   UserRound,
   UsersRound,
   XCircle,
@@ -30,10 +31,17 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { useAdvisers } from "@/hooks/useAdvisers";
+import { useCreateSchedule } from "@/hooks/useSchedules";
+import {
+  buildScheduledAtIso,
+  parseConsultationRequestError,
+  scheduleTypeIdByValue,
+  type ConsultationRequestFieldName,
+} from "@/lib/consultation-request";
 import {
   requestNotes,
   requestTimeSlots,
-  studentAdvisers,
   type AdviserAvailability,
   type AdviserProfile,
   type ConsultationRequestType,
@@ -72,10 +80,19 @@ export function StudentRequestConsultationForm() {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState("");
   const [topic, setTopic] = useState("");
   const [agenda, setAgenda] = useState("");
-
+  const [fieldErrors, setFieldErrors] = useState<
+    Partial<Record<ConsultationRequestFieldName, string>>
+  >({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const createScheduleMutation = useCreateSchedule();
+  const {
+    data: liveAdvisers = [],
+    error: advisersError,
+    isLoading: isLoadingAdvisers,
+  } = useAdvisers();
   const selectedAdviser =
-    studentAdvisers.find((adviser) => adviser.id === selectedAdviserId) ?? null;
-  const selectedPanelists = studentAdvisers.filter((adviser) =>
+    liveAdvisers.find((adviser) => adviser.id === selectedAdviserId) ?? null;
+  const selectedPanelists = liveAdvisers.filter((adviser) =>
     selectedPanelistIds.includes(adviser.id),
   );
   const visibleSlots = requestTimeSlots.filter((slot) => {
@@ -114,6 +131,8 @@ export function StudentRequestConsultationForm() {
   function handleScheduleTypeChange(value: ConsultationRequestType) {
     setScheduleType(value);
     setSelectedTimeSlot("");
+    setFieldErrors((current) => ({ ...current, scheduleType: undefined }));
+    setSubmitError(null);
 
     if (value !== "defense") {
       setSelectedPanelistIds([]);
@@ -123,6 +142,8 @@ export function StudentRequestConsultationForm() {
   function handleAdviserChange(value: string) {
     setSelectedAdviserId(value);
     setSelectedTimeSlot("");
+    setFieldErrors((current) => ({ ...current, selectedAdviserId: undefined }));
+    setSubmitError(null);
     setSelectedPanelistIds((current) =>
       current.filter((item) => item !== value),
     );
@@ -137,6 +158,82 @@ export function StudentRequestConsultationForm() {
 
       return current.filter((item) => item !== panelistId);
     });
+  }
+
+  async function handleSubmit() {
+    const nextFieldErrors: Partial<
+      Record<ConsultationRequestFieldName, string>
+    > = {};
+
+    if (!scheduleType) {
+      nextFieldErrors.scheduleType = "Please select a consultation type.";
+    }
+
+    if (!selectedAdviserId) {
+      nextFieldErrors.selectedAdviserId = "Please choose an adviser.";
+    }
+
+    if (!preferredDate) {
+      nextFieldErrors.preferredDate = "Please choose a preferred date.";
+    }
+
+    if (!selectedTimeSlot) {
+      nextFieldErrors.selectedTimeSlot =
+        "Please choose an available time slot.";
+    }
+
+    if (!topic.trim()) {
+      nextFieldErrors.topic = "Please enter a topic.";
+    }
+
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setFieldErrors(nextFieldErrors);
+      setSubmitError(null);
+      return;
+    }
+
+    if (!scheduleType) {
+      return;
+    }
+
+    const scheduledAt = buildScheduledAtIso(preferredDate, selectedTimeSlot);
+
+    setFieldErrors({});
+    setSubmitError(null);
+
+    try {
+      await createScheduleMutation.mutateAsync({
+        adviser_id: selectedAdviserId,
+        type_id: scheduleTypeIdByValue[scheduleType],
+        topic: topic.trim(),
+        scheduled_at: scheduledAt,
+      });
+
+      resetForm();
+    } catch (error) {
+      const parsedError = parseConsultationRequestError(error);
+
+      if (parsedError.submitError) {
+        setSubmitError(parsedError.submitError);
+      }
+
+      if (parsedError.fieldErrors) {
+        setFieldErrors(parsedError.fieldErrors);
+      }
+    }
+  }
+
+  function resetForm() {
+    setScheduleType(undefined);
+    setSelectedAdviserId("");
+    setSelectedPanelistIds([]);
+    setPreferredDate("");
+    setTimePeriod("all-day");
+    setSelectedTimeSlot("");
+    setTopic("");
+    setAgenda("");
+    setFieldErrors({});
+    setSubmitError(null);
   }
 
   return (
@@ -192,6 +289,7 @@ export function StudentRequestConsultationForm() {
                   ))}
                 </SelectContent>
               </Select>
+              <FieldErrorMessage message={fieldErrors.scheduleType} />
             </FormField>
 
             <FormField icon={UserRound} label="Select Adviser">
@@ -200,23 +298,38 @@ export function StudentRequestConsultationForm() {
                 onValueChange={handleAdviserChange}
               >
                 <SelectTrigger className="h-12 rounded-[1rem]">
-                  <SelectValue placeholder="Choose your adviser" />
+                  <SelectValue
+                    placeholder={
+                      isLoadingAdvisers
+                        ? "Loading advisers..."
+                        : liveAdvisers.length > 0
+                          ? "Choose your adviser"
+                          : "No live advisers available"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  {studentAdvisers.map((adviser) => (
+                  {liveAdvisers.map((adviser) => (
                     <SelectItem key={adviser.id} value={adviser.id}>
                       {adviser.name} ({adviser.departmentCode})
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {advisersError ? (
+                <FieldErrorMessage message="Unable to load advisers right now." />
+              ) : null}
+              {!isLoadingAdvisers && liveAdvisers.length === 0 ? (
+                <FieldErrorMessage message="No advisers are available right now." />
+              ) : null}
+              <FieldErrorMessage message={fieldErrors.selectedAdviserId} />
             </FormField>
 
             {scheduleType === "defense" ? (
               <FormField icon={UsersRound} label="Select Panelists (Optional)">
                 <div className="rounded-[1rem] border border-surface bg-surface-card px-4 py-4 shadow-soft">
                   <div className="space-y-3">
-                    {studentAdvisers
+                    {liveAdvisers
                       .filter((adviser) => adviser.id !== selectedAdviserId)
                       .map((panelist) => {
                         const checked = selectedPanelistIds.includes(
@@ -265,9 +378,16 @@ export function StudentRequestConsultationForm() {
                 onChange={(event) => {
                   setPreferredDate(event.target.value);
                   setSelectedTimeSlot("");
+                  setFieldErrors((current) => ({
+                    ...current,
+                    preferredDate: undefined,
+                    selectedTimeSlot: undefined,
+                  }));
+                  setSubmitError(null);
                 }}
                 className="h-12 rounded-[1rem]"
               />
+              <FieldErrorMessage message={fieldErrors.preferredDate} />
             </FormField>
 
             {canShowSlots ? (
@@ -332,7 +452,14 @@ export function StudentRequestConsultationForm() {
                           key={slot.id}
                           type="button"
                           disabled={!isAvailable}
-                          onClick={() => setSelectedTimeSlot(slot.id)}
+                          onClick={() => {
+                            setSelectedTimeSlot(slot.id);
+                            setFieldErrors((current) => ({
+                              ...current,
+                              selectedTimeSlot: undefined,
+                            }));
+                            setSubmitError(null);
+                          }}
                           className={cn(
                             "rounded-[1rem] border px-4 py-3 text-left transition-colors",
                             isAvailable
@@ -412,16 +539,26 @@ export function StudentRequestConsultationForm() {
                     </div>
                   </div>
                 ) : null}
+
+                <FieldErrorMessage message={fieldErrors.selectedTimeSlot} />
               </div>
             ) : null}
 
             <FormField label="Topic / Title">
               <Input
                 value={topic}
-                onChange={(event) => setTopic(event.target.value)}
+                onChange={(event) => {
+                  setTopic(event.target.value);
+                  setFieldErrors((current) => ({
+                    ...current,
+                    topic: undefined,
+                  }));
+                  setSubmitError(null);
+                }}
                 placeholder="e.g., Chapter 1 Review, Methodology Discussion"
                 className="h-12 rounded-[1rem]"
               />
+              <FieldErrorMessage message={fieldErrors.topic} />
             </FormField>
 
             <FormField label="Description / Agenda">
@@ -440,6 +577,12 @@ export function StudentRequestConsultationForm() {
               </div>
             </FormField>
 
+            {submitError ? (
+              <div className="rounded-[1rem] border border-destructive/25 bg-destructive/10 px-4 py-3 text-body text-destructive">
+                {submitError}
+              </div>
+            ) : null}
+
             <div className="flex flex-col gap-3 pt-2 sm:flex-row">
               <Button
                 asChild
@@ -450,10 +593,22 @@ export function StudentRequestConsultationForm() {
               </Button>
               <Button
                 type="button"
-                disabled={!canSubmit || descriptionRemaining < 0}
+                disabled={
+                  !canSubmit ||
+                  descriptionRemaining < 0 ||
+                  createScheduleMutation.isPending
+                }
+                onClick={handleSubmit}
                 className="h-12 flex-1 rounded-[1rem]"
               >
-                Submit Request
+                {createScheduleMutation.isPending ? (
+                  <>
+                    <LoaderCircle className="animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  "Submit Request"
+                )}
               </Button>
             </div>
           </CardContent>
@@ -544,6 +699,14 @@ export function StudentRequestConsultationForm() {
       </div>
     </section>
   );
+}
+
+function FieldErrorMessage({ message }: { message?: string }) {
+  if (!message) {
+    return null;
+  }
+
+  return <p className="text-body-sm text-destructive">{message}</p>;
 }
 
 function FormField({

@@ -145,6 +145,64 @@ class ScheduleServiceCancelTests(unittest.TestCase):
         self.assertEqual(len(adviser_notifications), 1)
         self.assertIn("cancelled", str(adviser_notifications[0]["message"]).lower())
 
+    def test_assigned_adviser_can_cancel_approved_schedule(self) -> None:
+        student = _build_user(role_name="student")
+        adviser = _build_user(role_name="adviser")
+        schedule = _build_schedule(
+            student_id=student.id,
+            adviser_id=adviser.id,
+            status_id=2,
+        )
+        schedule_repository = _FakeScheduleRepository([schedule])
+        notification_repository = _FakeNotificationRepository()
+        audit_repository = _FakeAuditRepository()
+        service = DefaultScheduleService(
+            schedule_repository=schedule_repository,
+            notification_repository=notification_repository,
+            audit_repository=audit_repository,
+        )
+
+        cancelled_schedule = service.cancel_schedule(adviser, schedule.id)
+
+        self.assertEqual(cancelled_schedule.status_id, 4)
+        self.assertEqual(schedule_repository.updated_statuses, [(schedule.id, 4)])
+        self.assertEqual(len(audit_repository.created_logs), 1)
+        self.assertEqual(
+            audit_repository.created_logs[0]["remarks"],
+            "Schedule cancelled by adviser.",
+        )
+        student_notifications = [
+            notification
+            for notification in notification_repository.created_notifications
+            if notification["user_id"] == student.id
+        ]
+        self.assertEqual(len(student_notifications), 1)
+        self.assertIn("cancelled by", str(student_notifications[0]["message"]).lower())
+
+    def test_adviser_cannot_cancel_non_approved_schedule(self) -> None:
+        student = _build_user(role_name="student")
+        adviser = _build_user(role_name="adviser")
+        schedule = _build_schedule(
+            student_id=student.id,
+            adviser_id=adviser.id,
+            status_id=1,
+        )
+        schedule_repository = _FakeScheduleRepository([schedule])
+        notification_repository = _FakeNotificationRepository()
+        audit_repository = _FakeAuditRepository()
+        service = DefaultScheduleService(
+            schedule_repository=schedule_repository,
+            notification_repository=notification_repository,
+            audit_repository=audit_repository,
+        )
+
+        with self.assertRaises(ScheduleConflictError):
+            service.cancel_schedule(adviser, schedule.id)
+
+        self.assertEqual(schedule_repository.updated_statuses, [])
+        self.assertEqual(notification_repository.created_notifications, [])
+        self.assertEqual(audit_repository.created_logs, [])
+
     def test_non_owning_student_cannot_cancel_schedule(self) -> None:
         owner = _build_user(role_name="student")
         other_student = _build_user(role_name="student")

@@ -385,20 +385,36 @@ class DefaultScheduleService(ScheduleService):
         current_user: AuthenticatedUser,
         schedule_id: UUID,
     ) -> Schedule:
-        self._require_student(current_user)
         schedule = self._get_schedule_or_raise(schedule_id)
-
-        if schedule.student_id != current_user.id:
-            raise ScheduleForbiddenError("Only the owning student can cancel this schedule.")
-
         pending_status_id = self._get_required_status_id(PENDING_STATUS_NAME)
+        approved_status_id = self._get_required_status_id(APPROVED_STATUS_NAME)
         cancelled_status_id = self._get_required_status_id(CANCELLED_STATUS_NAME)
 
         if schedule.status_id == cancelled_status_id:
             raise ScheduleConflictError("Schedule is already cancelled.")
 
-        if schedule.status_id != pending_status_id:
-            raise ScheduleConflictError("Only pending schedules can be cancelled.")
+        actor_label: str
+        audit_remarks: str
+        if current_user.app_role == STUDENT_ROLE_NAME:
+            if schedule.student_id != current_user.id:
+                raise ScheduleForbiddenError("Only the owning student can cancel this schedule.")
+
+            if schedule.status_id != pending_status_id:
+                raise ScheduleConflictError("Only pending schedules can be cancelled by students.")
+
+            actor_label = "student"
+            audit_remarks = "Schedule cancelled by student."
+        elif current_user.app_role == ADVISER_ROLE_NAME:
+            if schedule.adviser_id != current_user.id:
+                raise ScheduleForbiddenError("Only the assigned adviser can cancel this schedule.")
+
+            if schedule.status_id != approved_status_id:
+                raise ScheduleConflictError("Only approved schedules can be cancelled by advisers.")
+
+            actor_label = "adviser"
+            audit_remarks = "Schedule cancelled by adviser."
+        else:
+            raise ScheduleForbiddenError("Only students or assigned advisers can cancel schedules.")
 
         try:
             updated_schedule = self.schedule_repository.update_status(
@@ -413,19 +429,34 @@ class DefaultScheduleService(ScheduleService):
             changed_by=current_user.id,
             previous_status_id=schedule.status_id,
             new_status_id=cancelled_status_id,
-            remarks="Schedule cancelled by student.",
+            remarks=audit_remarks,
         )
-        self._create_notification(
-            user_id=updated_schedule.student_id,
-            schedule_id=updated_schedule.id,
-            message=f'You cancelled your schedule request for "{updated_schedule.topic}".',
-        )
-        self._create_notification(
-            user_id=updated_schedule.adviser_id,
-            schedule_id=updated_schedule.id,
-            message=(
-                f"{current_user.full_name} cancelled the schedule request for "
-                f'"{updated_schedule.topic}".'
-            ),
-        )
+        if actor_label == "student":
+            self._create_notification(
+                user_id=updated_schedule.student_id,
+                schedule_id=updated_schedule.id,
+                message=f'You cancelled your schedule request for "{updated_schedule.topic}".',
+            )
+            self._create_notification(
+                user_id=updated_schedule.adviser_id,
+                schedule_id=updated_schedule.id,
+                message=(
+                    f"{current_user.full_name} cancelled the schedule request for "
+                    f'"{updated_schedule.topic}".'
+                ),
+            )
+        else:
+            self._create_notification(
+                user_id=updated_schedule.student_id,
+                schedule_id=updated_schedule.id,
+                message=(
+                    f'Your approved schedule for "{updated_schedule.topic}" was cancelled by '
+                    f"{current_user.full_name}."
+                ),
+            )
+            self._create_notification(
+                user_id=updated_schedule.adviser_id,
+                schedule_id=updated_schedule.id,
+                message=f'You cancelled the approved schedule for "{updated_schedule.topic}".',
+            )
         return updated_schedule

@@ -124,13 +124,13 @@ export function useRejectSchedule(): UseMutationResult<
 export function useRescheduleSchedule(): UseMutationResult<
   Schedule,
   Error,
-  { id: string; new_scheduled_at: string }
+  { id: string; new_scheduled_at: string; remarks?: string }
 > {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, new_scheduled_at }) =>
-      rescheduleSchedule(id, new_scheduled_at),
+    mutationFn: ({ id, new_scheduled_at, remarks }) =>
+      rescheduleSchedule(id, new_scheduled_at, remarks),
     onSuccess: async (schedule, variables) => {
       queryClient.setQueryData(
         scheduleQueryKeys.detail(variables.id),

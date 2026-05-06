@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist_Mono, Poppins } from "next/font/google";
 
 import { AuthSessionRecovery } from "@/components/auth/auth-session-recovery";
+import { ReactQueryProvider } from "@/components/providers/react-query-provider";
 import "./globals.css";
 
 const poppins = Poppins({
@@ -33,8 +34,10 @@ export default function RootLayout({
       data-scroll-behavior="smooth"
     >
       <body className="flex min-h-full flex-col">
-        <AuthSessionRecovery />
-        {children}
+        <ReactQueryProvider>
+          <AuthSessionRecovery />
+          {children}
+        </ReactQueryProvider>
       </body>
     </html>
   );
