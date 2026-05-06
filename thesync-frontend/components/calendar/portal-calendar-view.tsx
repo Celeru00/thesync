@@ -20,6 +20,14 @@ import {
   CardFooter,
   CardHeader,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -157,14 +165,14 @@ const statusBadgeVariants = {
 
 const eventToneClassNames = {
   brand: {
-    monthBar: "bg-primary-tint text-brand-strong",
+    monthBar: "border border-brand-subtle/60 bg-primary-tint text-brand-strong",
     weekBlock:
-      "bg-linear-to-b from-brand to-brand-strong text-brand-on shadow-glow",
+      "border-2 border-brand-subtle bg-surface-card text-content-strong shadow-[0_12px_24px_rgba(45,94,255,0.06)]",
   },
   violet: {
-    monthBar: "bg-violet-soft text-violet",
+    monthBar: "border border-violet/18 bg-violet-soft text-violet",
     weekBlock:
-      "bg-linear-to-b from-violet to-[#9333ea] text-white shadow-[0_18px_40px_rgba(147,51,234,0.24)]",
+      "border-2 border-brand-subtle bg-surface-card text-content-strong shadow-[0_12px_24px_rgba(45,94,255,0.06)]",
   },
 } as const;
 
@@ -289,6 +297,39 @@ function getEventTypeLabel(type: CalendarEventType) {
   return type === "consultation" ? "Consultation" : "Defense";
 }
 
+function getEventStatusLabel(status: CalendarEventStatus) {
+  return status === "approved" ? "Approved" : "Pending";
+}
+
+function getEventEndsAt(event: CalendarEvent) {
+  return addMinutes(event.startsAt, event.durationHours * 60);
+}
+
+function getEventTimeRange(event: CalendarEvent) {
+  return `${timeFormatter.format(event.startsAt)} - ${timeFormatter.format(
+    getEventEndsAt(event),
+  )}`;
+}
+
+function getCompactEventTimeLabel(date: Date) {
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const period = hours >= 12 ? "pm" : "am";
+  const normalizedHour = hours % 12 || 12;
+
+  if (minutes === 0) {
+    return `${normalizedHour}${period}`;
+  }
+
+  return `${normalizedHour}:${String(minutes).padStart(2, "0")}${period}`;
+}
+
+function getCompactEventTimeRangeLabel(event: CalendarEvent) {
+  return `${getCompactEventTimeLabel(event.startsAt)} - ${getCompactEventTimeLabel(
+    getEventEndsAt(event),
+  )}`;
+}
+
 function getWeekEvents(date: Date, events: CalendarEvent[]) {
   const weekStart = startOfWeek(date);
   const weekEnd = addDays(weekStart, 7);
@@ -354,6 +395,8 @@ export function PortalCalendarView({
   const [view, setView] = useState<CalendarView>("month");
   const [focusDate, setFocusDate] = useState(() => getInitialFocusDate(events));
   const [requestDraft, setRequestDraft] = useState<RequestDraft | null>(null);
+  const [selectedWeekEvent, setSelectedWeekEvent] =
+    useState<CalendarEvent | null>(null);
   const calendarEvents = useMemo<CalendarEvent[]>(
     () =>
       events
@@ -470,6 +513,7 @@ export function PortalCalendarView({
             <WeekGrid
               canCreateRequests={canCreateRequests}
               focusDate={focusDate}
+              onEventSelect={setSelectedWeekEvent}
               onRequestSlotSelect={(date, endAt) =>
                 setRequestDraft({
                   date,
@@ -489,6 +533,15 @@ export function PortalCalendarView({
           onClose={() => setRequestDraft(null)}
         />
       ) : null}
+
+      <WeekEventDetailsModal
+        event={selectedWeekEvent}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedWeekEvent(null);
+          }
+        }}
+      />
     </>
   );
 }
@@ -657,12 +710,14 @@ function MonthGrid({
 function WeekGrid({
   canCreateRequests,
   focusDate,
+  onEventSelect,
   onRequestSlotSelect,
   weekDays,
   weekEvents,
 }: {
   canCreateRequests: boolean;
   focusDate: Date;
+  onEventSelect: (event: CalendarEvent) => void;
   onRequestSlotSelect: (date: Date, endAt: Date) => void;
   weekDays: Date[];
   weekEvents: CalendarEvent[];
@@ -898,15 +953,17 @@ function WeekGrid({
                 >
                   {dayAllDayEvents.length > 0 ? (
                     dayAllDayEvents.map((event) => (
-                      <div
+                      <button
                         key={event.id}
+                        type="button"
+                        onClick={() => onEventSelect(event)}
                         className={cn(
-                          "truncate rounded-md px-2 py-1 text-[0.78rem] font-medium",
+                          "truncate rounded-[0.6rem] px-2 py-1 text-left text-[0.78rem] font-medium transition-colors hover:bg-primary-tint/65",
                           eventToneClassNames[event.tone].monthBar,
                         )}
                       >
                         {event.title}
-                      </div>
+                      </button>
                     ))
                   ) : (
                     <span className="text-[0.75rem] text-content-muted/70">
@@ -993,11 +1050,16 @@ function WeekGrid({
               return null;
             }
 
+            const isCompactEvent = event.durationHours <= 1;
+
             return (
-              <div
+              <button
                 key={event.id}
+                type="button"
+                onClick={() => onEventSelect(event)}
+                title={event.title}
                 className={cn(
-                  "z-10 mx-1 my-1 rounded-[0.9rem] px-3 py-2 text-left",
+                  "z-10 mx-1 my-1 flex h-[calc(100%-0.5rem)] flex-col justify-between overflow-hidden rounded-[0.8rem] px-2.5 py-2 text-left transition-shadow hover:shadow-[0_14px_28px_rgba(45,94,255,0.1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2",
                   eventToneClassNames[event.tone].weekBlock,
                 )}
                 style={{
@@ -1005,18 +1067,93 @@ function WeekGrid({
                   gridRow: `${startRow + 3} / span ${Math.max(1, event.durationHours * 2)}`,
                 }}
               >
-                <div className="text-[0.98rem] leading-5 font-medium">
-                  {event.title}
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  <div
+                    className={cn(
+                      "text-content-strong",
+                      isCompactEvent
+                        ? "line-clamp-2 text-[0.72rem] leading-[0.84rem] font-medium tracking-[-0.01em]"
+                        : "line-clamp-2 text-[0.82rem] leading-[0.98rem] font-medium tracking-[-0.01em]",
+                    )}
+                  >
+                    {event.title}
+                  </div>
                 </div>
-                <div className="mt-1 text-[0.8rem] leading-4 text-white/85">
-                  {timeFormatter.format(event.startsAt)}
+
+                <div
+                  className={cn(
+                    "mt-1 shrink-0 text-content-muted",
+                    isCompactEvent
+                      ? "truncate text-[0.62rem] leading-[0.75rem] font-medium"
+                      : "text-[0.7rem] leading-[0.85rem] font-medium",
+                  )}
+                >
+                  {isCompactEvent
+                    ? getCompactEventTimeRangeLabel(event)
+                    : getEventTimeRange(event)}
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
       </div>
     </div>
+  );
+}
+
+function WeekEventDetailsModal({
+  event,
+  onOpenChange,
+}: {
+  event: CalendarEvent | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <Dialog open={event !== null} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md border border-brand-subtle bg-surface-card">
+        {event ? (
+          <>
+            <DialogHeader className="border-b border-surface pb-5">
+              <DialogTitle>{event.title}</DialogTitle>
+              <DialogDescription className="text-content-muted">
+                {requestDateFormatter.format(event.startsAt)}
+              </DialogDescription>
+            </DialogHeader>
+
+            <DialogBody className="space-y-4 py-6">
+              <div className="rounded-[1rem] border border-surface bg-surface-muted-soft px-4 py-4">
+                <div className="text-[0.82rem] font-semibold tracking-[0.04em] text-content-muted uppercase">
+                  Time
+                </div>
+                <div className="mt-2 text-[1.05rem] font-semibold text-content-strong">
+                  {getEventTimeRange(event)}
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[1rem] border border-surface bg-surface-card px-4 py-4">
+                  <div className="text-[0.82rem] font-semibold tracking-[0.04em] text-content-muted uppercase">
+                    Type
+                  </div>
+                  <div className="mt-2 text-[0.98rem] font-medium text-content-strong">
+                    {getEventTypeLabel(event.type)}
+                  </div>
+                </div>
+
+                <div className="rounded-[1rem] border border-surface bg-surface-card px-4 py-4">
+                  <div className="text-[0.82rem] font-semibold tracking-[0.04em] text-content-muted uppercase">
+                    Status
+                  </div>
+                  <div className="mt-2 text-[0.98rem] font-medium text-content-strong">
+                    {getEventStatusLabel(event.status)}
+                  </div>
+                </div>
+              </div>
+            </DialogBody>
+          </>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   );
 }
 
