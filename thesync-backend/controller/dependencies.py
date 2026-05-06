@@ -5,13 +5,15 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session
 
 from model.auth import AppRole, AuthenticatedUser, SupabaseClaims
+from repository.database import get_session
 from usecase.auth import AuthorizationError, ensure_roles
 
 bearer_scheme = HTTPBearer(
     auto_error=False,
-    description=("Paste a Supabase access token as a Bearer token to test protected endpoints."),
+    description="Paste a Supabase access token as a Bearer token to test protected endpoints.",
 )
 
 
@@ -37,6 +39,7 @@ def get_current_user(
 
 
 CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]
+DBSession = Annotated[Session, Depends(get_session)]
 
 
 def get_current_claims(

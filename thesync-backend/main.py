@@ -31,12 +31,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(SupabaseAuthMiddleware)
+
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(calendar_router, prefix="/api")
 app.include_router(availability_router, prefix="/api")
 app.include_router(panelists_router, prefix="/api")
 app.include_router(notifications_router, prefix="/api")
-app.include_router(schedules_router, prefix="/api")
+app.include_router(schedules_router, prefix="/api/v1")
 
 
 @app.get("/")

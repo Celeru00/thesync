@@ -8,6 +8,47 @@ from pydantic import Field, NonNegativeInt, PositiveInt, field_validator, model_
 from model.base import DomainModel, NonEmptyText, normalize_optional_text
 
 
+class UserSummary(DomainModel):
+    """Minimal user fields embedded inside a ScheduleDetail response."""
+
+    id: UUID
+    full_name: NonEmptyText
+
+
+class PanelistDetail(DomainModel):
+    """Panelist assignment entry with resolved names (for ScheduleDetail)."""
+
+    id: UUID
+    panelist_id: UUID
+    full_name: NonEmptyText
+    invite_status: NonEmptyText
+
+
+class ScheduleDetail(DomainModel):
+    """Full schedule detail response for GET /schedules/{id} (THE-55).
+
+    Differences from Schedule:
+    - student/adviser are embedded UserSummary objects instead of raw UUIDs
+    - type and status are resolved name strings
+    - panelist_assignments contains resolved names
+    - meet_link is only populated when status == approved
+    - google_calendar_event_id is only populated for admin/adviser callers
+    """
+
+    id: UUID
+    topic: NonEmptyText
+    student: UserSummary
+    adviser: UserSummary
+    type: NonEmptyText
+    status: NonEmptyText
+    requested_at: datetime
+    scheduled_at: datetime | None = None
+    meet_link: str | None = None
+    google_calendar_event_id: str | None = None
+    panelist_assignments: list[PanelistDetail]
+    created_at: datetime
+
+
 class Schedule(DomainModel):
     """Domain and API representation of a schedule request."""
 
