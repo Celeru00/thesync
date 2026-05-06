@@ -13,6 +13,14 @@ export function SessionItem({ session }: SessionItemProps) {
     session;
 
   const isDefense = type === "defense";
+  const badgeVariant =
+    status === "approved"
+      ? "success"
+      : status === "rescheduled"
+        ? "info"
+        : status === "cancelled"
+          ? "destructive"
+          : "warning";
 
   return (
     <div className="flex items-start gap-3 rounded-xl border border-surface p-4">
@@ -35,10 +43,7 @@ export function SessionItem({ session }: SessionItemProps) {
         {/* Title row with badge */}
         <div className="flex items-start justify-between gap-2">
           <p className="text-label leading-snug">{title}</p>
-          <Badge
-            variant={status === "approved" ? "success" : "warning"}
-            className="shrink-0 capitalize"
-          >
+          <Badge variant={badgeVariant} className="shrink-0 capitalize">
             {status}
           </Badge>
         </div>

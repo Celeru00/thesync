@@ -17,12 +17,22 @@ import { SessionItem } from "./session-item";
 import { StatCard } from "./stat-card";
 
 export function StudentDashboard() {
-  const { data, isLoading } = useStudentDashboard();
+  const { data, isLoading, error } = useStudentDashboard();
 
-  if (isLoading || !data) {
+  if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
         <p className="text-body-sm">Loading dashboard…</p>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <p className="text-body-sm text-content-muted">
+          Unable to load the dashboard right now.
+        </p>
       </div>
     );
   }
@@ -33,7 +43,9 @@ export function StudentDashboard() {
     <div className="space-y-6">
       {/* Page header */}
       <div className="space-y-1">
-        <h1 className="text-subheading">Welcome back, Gabby! 👋</h1>
+        <h1 className="text-subheading">
+          Welcome back, {data.currentUserName}! 👋
+        </h1>
         <p className="text-body-sm">
           Here&apos;s an overview of your thesis consultation schedule
         </p>
@@ -81,9 +93,15 @@ export function StudentDashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {upcomingSessions.map((session) => (
-              <SessionItem key={session.id} session={session} />
-            ))}
+            {upcomingSessions.length > 0 ? (
+              upcomingSessions.map((session) => (
+                <SessionItem key={session.id} session={session} />
+              ))
+            ) : (
+              <p className="text-body-sm text-content-muted">
+                No upcoming sessions yet.
+              </p>
+            )}
           </CardContent>
         </Card>
 

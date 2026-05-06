@@ -1,4 +1,10 @@
-import type { StudentDashboardData } from "@/types/dashboard";
+import type {
+  AdviserDashboardData,
+  ActivityItem,
+  SessionStatus,
+  SessionType,
+  StudentDashboardData,
+} from "@/types/dashboard";
 
 import { axiosInstance } from "@/lib/axiosInstance";
 
@@ -117,6 +123,63 @@ export type AdviserDirectoryUser = {
   created_at: ISODateTimeString;
 };
 
+type DashboardActivityApiResponse = {
+  id: UUID;
+  activity_type: ActivityItem["type"];
+  title: string;
+  message: string;
+  created_at: ISODateTimeString;
+};
+
+type DashboardSessionApiResponse = {
+  id: UUID;
+  title: string;
+  counterpart_name: string;
+  scheduled_at: ISODateTimeString;
+  ends_at: ISODateTimeString;
+  status_name: string;
+  type_name: string;
+};
+
+type StudentDashboardApiResponse = {
+  current_user_name: string;
+  stats: {
+    upcoming_sessions: number;
+    pending_requests: number;
+    completed: number;
+    total_hours: number;
+  };
+  upcoming_sessions: DashboardSessionApiResponse[];
+  recent_activity: DashboardActivityApiResponse[];
+};
+
+type AdviserDashboardApiResponse = {
+  current_user_name: string;
+  stats: {
+    pending_approvals: number;
+    todays_sessions: number;
+    active_advisees: number;
+    this_month: number;
+  };
+  upcoming_sessions: DashboardSessionApiResponse[];
+  recent_activity: DashboardActivityApiResponse[];
+};
+
+const dashboardDateFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "long",
+  day: "numeric",
+  year: "numeric",
+});
+
+const dashboardTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+const dashboardRelativeTimeFormatter = new Intl.RelativeTimeFormat("en-US", {
+  numeric: "auto",
+});
+
 function toSearchParams(
   params: Record<string, string | number | undefined>,
 ): URLSearchParams {
@@ -139,11 +202,47 @@ function withQuery(path: string, params: URLSearchParams): string {
 }
 
 export async function getStudentDashboard(): Promise<StudentDashboardData> {
-  const { data } = await axiosInstance.get<StudentDashboardData>(
+  const { data } = await axiosInstance.get<StudentDashboardApiResponse>(
     "/api/v1/student/dashboard",
   );
 
-  return data;
+  return {
+    currentUserName: data.current_user_name,
+    stats: {
+      upcomingSessions: data.stats.upcoming_sessions,
+      pendingRequests: data.stats.pending_requests,
+      completed: data.stats.completed,
+      totalHours: data.stats.total_hours,
+    },
+    upcomingSessions: data.upcoming_sessions.map((session) =>
+      mapStudentDashboardSession(session),
+    ),
+    recentActivity: data.recent_activity.map((activity) =>
+      mapDashboardActivity(activity),
+    ),
+  };
+}
+
+export async function getAdviserDashboard(): Promise<AdviserDashboardData> {
+  const { data } = await axiosInstance.get<AdviserDashboardApiResponse>(
+    "/api/v1/adviser/dashboard",
+  );
+
+  return {
+    currentUserName: data.current_user_name,
+    stats: {
+      pendingApprovals: data.stats.pending_approvals,
+      todaysSessions: data.stats.todays_sessions,
+      activeAdvisees: data.stats.active_advisees,
+      thisMonth: data.stats.this_month,
+    },
+    upcomingSessions: data.upcoming_sessions.map((session) =>
+      mapAdviserDashboardSession(session),
+    ),
+    recentActivity: data.recent_activity.map((activity) =>
+      mapDashboardActivity(activity),
+    ),
+  };
 }
 
 export async function createSchedule(
@@ -169,6 +268,104 @@ export async function listSchedules(
   );
   const response = await axiosInstance.get<ScheduleListResponse>(path);
   return response.data;
+}
+
+function mapStudentDashboardSession(
+  session: DashboardSessionApiResponse,
+): StudentDashboardData["upcomingSessions"][number] {
+  const scheduledAt = new Date(session.scheduled_at);
+  const endsAt = new Date(session.ends_at);
+
+  return {
+    id: session.id,
+    title: session.title,
+    adviserName: session.counterpart_name,
+    date: dashboardDateFormatter.format(scheduledAt),
+    startTime: dashboardTimeFormatter.format(scheduledAt),
+    endTime: dashboardTimeFormatter.format(endsAt),
+    status: normalizeDashboardSessionStatus(session.status_name),
+    type: normalizeDashboardSessionType(session.type_name),
+  };
+}
+
+function mapAdviserDashboardSession(
+  session: DashboardSessionApiResponse,
+): AdviserDashboardData["upcomingSessions"][number] {
+  const scheduledAt = new Date(session.scheduled_at);
+  const endsAt = new Date(session.ends_at);
+
+  return {
+    id: session.id,
+    title: session.title,
+    studentName: session.counterpart_name,
+    date: dashboardDateFormatter.format(scheduledAt),
+    startTime: dashboardTimeFormatter.format(scheduledAt),
+    endTime: dashboardTimeFormatter.format(endsAt),
+    status: normalizeDashboardSessionStatus(session.status_name),
+    type: normalizeDashboardSessionType(session.type_name),
+  };
+}
+
+function mapDashboardActivity(
+  activity: DashboardActivityApiResponse,
+): ActivityItem {
+  const timestamp = formatDashboardRelativeTime(activity.created_at);
+
+  return {
+    id: activity.id,
+    type: activity.activity_type,
+    title: activity.title,
+    description: `${activity.message} · ${timestamp}`,
+    timestamp,
+  };
+}
+
+function normalizeDashboardSessionStatus(statusName: string): SessionStatus {
+  switch (statusName.trim().toLowerCase()) {
+    case "approved":
+      return "approved";
+    case "cancelled":
+      return "cancelled";
+    case "rescheduled":
+      return "rescheduled";
+    default:
+      return "pending";
+  }
+}
+
+function normalizeDashboardSessionType(typeName: string): SessionType {
+  return typeName.trim().toLowerCase() === "defense"
+    ? "defense"
+    : "consultation";
+}
+
+function formatDashboardRelativeTime(value: ISODateTimeString): string {
+  const now = Date.now();
+  const target = new Date(value).getTime();
+  const deltaMs = target - now;
+
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (Math.abs(deltaMs) < hour) {
+    return dashboardRelativeTimeFormatter.format(
+      Math.round(deltaMs / minute),
+      "minute",
+    );
+  }
+
+  if (Math.abs(deltaMs) < day) {
+    return dashboardRelativeTimeFormatter.format(
+      Math.round(deltaMs / hour),
+      "hour",
+    );
+  }
+
+  return dashboardRelativeTimeFormatter.format(
+    Math.round(deltaMs / day),
+    "day",
+  );
 }
 
 export async function getSchedule(id: string): Promise<Schedule> {
