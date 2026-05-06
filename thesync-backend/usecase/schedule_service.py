@@ -173,6 +173,15 @@ class DefaultScheduleService(ScheduleService):
 
         return adviser
 
+    def _get_user_or_raise(self, user_id: UUID, *, label: str) -> User:
+        user = self.user_repository.get_by_id(user_id)
+        if user is None:
+            raise ScheduleServiceUnavailableError(
+                f"{label} could not be resolved for email delivery."
+            )
+
+        return user
+
     def _ensure_schedule_type_exists(self, type_id: int) -> str:
         schedule_type_name = self.schedule_repository.get_type_name_by_id(type_id)
         if schedule_type_name is None:
@@ -431,7 +440,9 @@ class DefaultScheduleService(ScheduleService):
             new_status_id=cancelled_status_id,
             remarks=audit_remarks,
         )
+        schedule_type_name = self.schedule_repository.get_type_name_by_id(updated_schedule.type_id)
         if actor_label == "student":
+            adviser = self._get_user_or_raise(updated_schedule.adviser_id, label="Adviser")
             self._create_notification(
                 user_id=updated_schedule.student_id,
                 schedule_id=updated_schedule.id,
@@ -445,7 +456,19 @@ class DefaultScheduleService(ScheduleService):
                     f'"{updated_schedule.topic}".'
                 ),
             )
+            self.email_service.send_schedule_cancelled(
+                recipient_email=str(adviser.email),
+                recipient_name=adviser.full_name,
+                cancelled_by_student=True,
+                student_name=current_user.full_name,
+                adviser_name=adviser.full_name,
+                topic=updated_schedule.topic,
+                schedule_type=schedule_type_name,
+                requested_at=updated_schedule.scheduled_at,
+                cancelled_by_name=current_user.full_name,
+            )
         else:
+            student = self._get_user_or_raise(updated_schedule.student_id, label="Student")
             self._create_notification(
                 user_id=updated_schedule.student_id,
                 schedule_id=updated_schedule.id,
@@ -458,5 +481,16 @@ class DefaultScheduleService(ScheduleService):
                 user_id=updated_schedule.adviser_id,
                 schedule_id=updated_schedule.id,
                 message=f'You cancelled the approved schedule for "{updated_schedule.topic}".',
+            )
+            self.email_service.send_schedule_cancelled(
+                recipient_email=str(student.email),
+                recipient_name=student.full_name,
+                cancelled_by_student=False,
+                student_name=student.full_name,
+                adviser_name=current_user.full_name,
+                topic=updated_schedule.topic,
+                schedule_type=schedule_type_name,
+                requested_at=updated_schedule.scheduled_at,
+                cancelled_by_name=current_user.full_name,
             )
         return updated_schedule

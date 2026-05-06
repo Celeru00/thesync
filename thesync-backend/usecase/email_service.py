@@ -90,6 +90,21 @@ class EmailService:
     ) -> None:
         raise NotImplementedError
 
+    def send_schedule_cancelled(
+        self,
+        *,
+        recipient_email: str | None,
+        recipient_name: str | None,
+        cancelled_by_student: bool,
+        student_name: str | None,
+        adviser_name: str | None,
+        topic: str,
+        schedule_type: str | None,
+        requested_at: datetime | None,
+        cancelled_by_name: str | None,
+    ) -> None:
+        raise NotImplementedError
+
 
 class SendGridEmailService(EmailService):
     """SendGrid-backed email service using dynamic templates only."""
@@ -269,5 +284,40 @@ class SendGridEmailService(EmailService):
                 "adviser_name": adviser_name,
                 "topic": topic,
                 "scheduled_at": _format_datetime(scheduled_at),
+            },
+        )
+
+    def send_schedule_cancelled(
+        self,
+        *,
+        recipient_email: str | None,
+        recipient_name: str | None,
+        cancelled_by_student: bool,
+        student_name: str | None,
+        adviser_name: str | None,
+        topic: str,
+        schedule_type: str | None,
+        requested_at: datetime | None,
+        cancelled_by_name: str | None,
+    ) -> None:
+        display_requested_at = None
+        if requested_at is not None:
+            display_requested_at = (
+                f"{_format_display_date(requested_at)} at {_format_display_time(requested_at)}"
+            )
+
+        self._send_dynamic_template(
+            recipient_email=recipient_email,
+            recipient_name=recipient_name,
+            template_id=self._settings.sendgrid_template_schedule_cancelled,
+            dynamic_template_data={
+                "recipient_name": recipient_name,
+                "cancelled_by_student": cancelled_by_student,
+                "student_name": student_name,
+                "adviser_name": adviser_name,
+                "topic": topic,
+                "schedule_type": schedule_type,
+                "requested_at": display_requested_at,
+                "cancelled_by_name": cancelled_by_name,
             },
         )

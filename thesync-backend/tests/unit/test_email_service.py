@@ -109,6 +109,45 @@ class SendGridEmailServiceTests(unittest.TestCase):
 
         self.assertEqual(service.delivered_payloads, [])
 
+    def test_cancelled_email_uses_dynamic_template_payload(self) -> None:
+        service = _RecordingSendGridEmailService(
+            Settings(
+                sendgrid_api_key="sendgrid-key",
+                sendgrid_from_email="noreply@example.com",
+                sendgrid_template_schedule_cancelled="d-cancelled",
+            )
+        )
+
+        service.send_schedule_cancelled(
+            recipient_email="adviser@example.com",
+            recipient_name="Adviser User",
+            cancelled_by_student=True,
+            student_name="Student User",
+            adviser_name="Adviser User",
+            topic="CMSC 200A Proposal Defense",
+            schedule_type="consultation",
+            requested_at=datetime(2026, 5, 10, 10, 30, tzinfo=UTC),
+            cancelled_by_name="Student User",
+        )
+
+        self.assertEqual(len(service.delivered_payloads), 1)
+        payload = service.delivered_payloads[0]
+        self.assertEqual(payload["template_id"], "d-cancelled")
+        personalization = payload["personalizations"][0]
+        self.assertEqual(personalization["to"][0]["email"], "adviser@example.com")
+        self.assertEqual(
+            personalization["dynamic_template_data"]["cancelled_by_student"],
+            True,
+        )
+        self.assertEqual(
+            personalization["dynamic_template_data"]["requested_at"],
+            "May 10, 2026 at 10:30 AM",
+        )
+        self.assertEqual(
+            personalization["dynamic_template_data"]["cancelled_by_name"],
+            "Student User",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -95,6 +95,7 @@ class _FakeEmailService:
         self.approved_calls: list[dict[str, object]] = []
         self.rejected_calls: list[dict[str, object]] = []
         self.rescheduled_calls: list[dict[str, object]] = []
+        self.cancelled_calls: list[dict[str, object]] = []
 
     def send_schedule_submitted(self, **kwargs) -> None:
         self.submitted_calls.append(kwargs)
@@ -107,6 +108,9 @@ class _FakeEmailService:
 
     def send_schedule_rescheduled(self, **kwargs) -> None:
         self.rescheduled_calls.append(kwargs)
+
+    def send_schedule_cancelled(self, **kwargs) -> None:
+        self.cancelled_calls.append(kwargs)
 
 
 class _FakeUserRepository:
@@ -214,6 +218,11 @@ class _StatusScheduleRepository:
 
     def adviser_has_schedule_conflict(self, **kwargs) -> bool:
         return False
+
+    def get_type_name_by_id(self, type_id: int) -> str | None:
+        if type_id == 1:
+            return "defense"
+        return None
 
 
 class _FakeNotificationRepository:
@@ -364,6 +373,58 @@ class ScheduleEmailNotificationTests(unittest.TestCase):
 
         self.assertEqual(len(email_service.rescheduled_calls), 1)
         self.assertEqual(email_service.rescheduled_calls[0]["scheduled_at"], new_time)
+
+    def test_student_cancel_sends_cancelled_email_to_adviser(self) -> None:
+        student = _build_user(role_name="student", full_name="Student User")
+        adviser_id = uuid4()
+        adviser = _build_plain_user(
+            user_id=adviser_id,
+            role_name="adviser",
+            full_name="Adviser User",
+            email="adviser@example.com",
+        )
+        schedule = _build_schedule(student_id=student.id, adviser_id=adviser_id, status_id=1)
+        email_service = _FakeEmailService()
+        service = DefaultScheduleService(
+            schedule_repository=_StatusScheduleRepository(schedule),
+            user_repository=_FakeUserRepository([adviser]),
+            notification_repository=_FakeNotificationRepository(),
+            audit_repository=_FakeAuditRepository(),
+            email_service=email_service,
+        )
+
+        service.cancel_schedule(student, schedule.id)
+
+        self.assertEqual(len(email_service.cancelled_calls), 1)
+        self.assertEqual(email_service.cancelled_calls[0]["recipient_email"], "adviser@example.com")
+        self.assertEqual(email_service.cancelled_calls[0]["cancelled_by_student"], True)
+        self.assertEqual(email_service.cancelled_calls[0]["cancelled_by_name"], "Student User")
+
+    def test_adviser_cancel_sends_cancelled_email_to_student(self) -> None:
+        student_id = uuid4()
+        adviser = _build_user(role_name="adviser", full_name="Adviser User")
+        student = _build_plain_user(
+            user_id=student_id,
+            role_name="student",
+            full_name="Student User",
+            email="student@example.com",
+        )
+        schedule = _build_schedule(student_id=student_id, adviser_id=adviser.id, status_id=2)
+        email_service = _FakeEmailService()
+        service = DefaultScheduleService(
+            schedule_repository=_StatusScheduleRepository(schedule),
+            user_repository=_FakeUserRepository([student]),
+            notification_repository=_FakeNotificationRepository(),
+            audit_repository=_FakeAuditRepository(),
+            email_service=email_service,
+        )
+
+        service.cancel_schedule(adviser, schedule.id)
+
+        self.assertEqual(len(email_service.cancelled_calls), 1)
+        self.assertEqual(email_service.cancelled_calls[0]["recipient_email"], "student@example.com")
+        self.assertEqual(email_service.cancelled_calls[0]["cancelled_by_student"], False)
+        self.assertEqual(email_service.cancelled_calls[0]["cancelled_by_name"], "Adviser User")
 
 
 if __name__ == "__main__":

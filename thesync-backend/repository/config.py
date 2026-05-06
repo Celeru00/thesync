@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     sendgrid_template_schedule_approved: str | None = None
     sendgrid_template_schedule_rejected: str | None = None
     sendgrid_template_schedule_rescheduled: str | None = None
+    sendgrid_template_schedule_cancelled: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
