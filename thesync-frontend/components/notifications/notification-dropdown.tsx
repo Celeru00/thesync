@@ -68,20 +68,27 @@ export function NotificationDropdown({
           align="end"
           sideOffset={8}
           className={cn(
-            "z-50 w-80 overflow-hidden rounded-2xl border border-surface bg-surface-card shadow-lg",
+            "z-50 w-[min(calc(100vw-2rem),26rem)] overflow-hidden rounded-2xl border border-surface bg-surface-card shadow-lg",
             "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
             "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
             "data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2",
           )}
         >
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-surface px-4 py-3">
-            <p className="text-label">Notifications</p>
+          <div className="flex items-center justify-between gap-3 border-b border-surface px-4 py-3">
+            <div>
+              <p className="text-label">Notifications</p>
+              {unreadCount > 0 ? (
+                <p className="text-caption text-content-muted">
+                  {unreadCount} unread
+                </p>
+              ) : null}
+            </div>
             {unreadCount > 0 && (
               <button
                 onClick={onMarkAllAsRead}
                 disabled={isMarkingAllRead}
-                className="flex items-center gap-1.5 text-caption text-brand transition-colors hover:text-brand/80"
+                className="flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 text-caption text-brand transition-colors hover:bg-brand-soft hover:text-brand"
               >
                 {isMarkingAllRead ? (
                   <LoaderCircle className="size-3.5 animate-spin" />
@@ -107,7 +114,7 @@ export function NotificationDropdown({
               No notifications yet.
             </p>
           ) : (
-            <div className="divide-y divide-surface">
+            <div className="max-h-[24rem] overflow-y-auto p-2">
               {preview.map((n) => (
                 <NotificationItem
                   key={n.id}
@@ -121,11 +128,11 @@ export function NotificationDropdown({
           )}
 
           {/* Footer */}
-          <div className="border-t border-surface px-4 py-3">
+          <div className="border-t border-surface bg-surface-card px-3 py-3">
             <Button
               asChild
               variant="ghost"
-              className="w-full text-brand hover:text-brand/80"
+              className="h-10 w-full rounded-xl text-brand hover:text-brand/80"
             >
               <Link href={allNotificationsHref}>View all notifications</Link>
             </Button>

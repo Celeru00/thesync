@@ -57,6 +57,61 @@ export function NotificationItem({
   // Extract title from message or use provided title, default to first line
   const title = n.title || n.message.split("\n")[0] || "Notification";
 
+  if (compact) {
+    return (
+      <div
+        role={onClick ? "button" : undefined}
+        tabIndex={onClick ? 0 : undefined}
+        onClick={onClick}
+        onKeyDown={(event) => {
+          if (!onClick || (event.key !== "Enter" && event.key !== " ")) {
+            return;
+          }
+
+          event.preventDefault();
+          onClick();
+        }}
+        className={cn(
+          "group relative rounded-xl px-3 py-3 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand/50",
+          onClick && "cursor-pointer",
+          n.is_read
+            ? "hover:bg-surface-muted-soft"
+            : "bg-info-soft/45 hover:bg-info-soft/70",
+        )}
+      >
+        {!n.is_read ? (
+          <span className="absolute left-0 top-3 h-10 w-1 rounded-r-full bg-info" />
+        ) : null}
+
+        <div className="flex gap-3">
+          <div
+            className={cn(
+              "mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full",
+              bg,
+            )}
+          >
+            <Icon className={cn("size-4", color)} />
+          </div>
+
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <p className="line-clamp-1 text-sm font-semibold leading-5 text-content-strong">
+                {title}
+              </p>
+              <span className="shrink-0 whitespace-nowrap text-xs leading-5 text-content-muted">
+                {formatRelativeTime(n.created_at)}
+              </span>
+            </div>
+
+            <p className="line-clamp-2 text-sm leading-5 text-content-muted">
+              {getPreviewMessage(n.message, title)}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       role={onClick ? "button" : undefined}
@@ -75,7 +130,7 @@ export function NotificationItem({
         onClick &&
           "cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-brand/50",
         !n.is_read && "bg-info-soft/20",
-        compact ? "px-4 py-3" : "px-6 py-4",
+        "px-6 py-4",
       )}
     >
       <div className="flex gap-3">
@@ -83,11 +138,11 @@ export function NotificationItem({
         <div
           className={cn(
             "flex shrink-0 items-center justify-center rounded-full",
-            compact ? "size-8" : "size-9",
+            "size-9",
             bg,
           )}
         >
-          <Icon className={cn(compact ? "size-3.5" : "size-4", color)} />
+          <Icon className={cn("size-4", color)} />
         </div>
 
         {/* Content */}
@@ -99,12 +154,7 @@ export function NotificationItem({
             </span>
           </div>
 
-          <p
-            className={cn(
-              "text-body-sm text-content-muted",
-              compact ? "line-clamp-2" : "mb-3",
-            )}
-          >
+          <p className={cn("text-body-sm text-content-muted", "mb-3")}>
             {n.message}
           </p>
 
@@ -131,4 +181,17 @@ export function NotificationItem({
       </div>
     </div>
   );
+}
+
+function getPreviewMessage(message: string, title: string) {
+  const normalizedMessage = message.trim();
+  const normalizedTitle = title.trim();
+
+  if (
+    normalizedMessage.toLowerCase().startsWith(normalizedTitle.toLowerCase())
+  ) {
+    return normalizedMessage.slice(normalizedTitle.length).trim() || message;
+  }
+
+  return message;
 }
