@@ -3,12 +3,14 @@ from __future__ import annotations
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import EmailStr, Field
+from pydantic import EmailStr, Field, PositiveInt
 
-from model.base import DomainModel
+from model.base import DomainModel, NonEmptyText
 from model.user import User
 
 AppRole = Literal["student", "adviser", "admin"]
+SignupRole = Literal["student", "adviser"]
+AuthFlow = Literal["login", "signup"]
 
 
 def normalize_app_role_name(value: str) -> AppRole | None:
@@ -21,10 +23,6 @@ def normalize_app_role_name(value: str) -> AppRole | None:
         return normalized
 
     return None
-
-
-def is_registration_completed(metadata: dict[str, Any]) -> bool:
-    return metadata.get("registration_completed") is True
 
 
 class SupabaseClaims(DomainModel):
@@ -49,3 +47,30 @@ class AuthenticatedUser(User):
     """Application user resolved from a verified Supabase session."""
 
     app_role: AppRole
+
+
+class ApplicationUserState(DomainModel):
+    """Backend view of a provisioned application user."""
+
+    id: UUID
+    role_id: PositiveInt
+    registration_completed: bool
+    app_role: AppRole | None = None
+
+
+class AuthInitializeRequest(DomainModel):
+    flow: AuthFlow
+    requested_role: AppRole | None = None
+
+
+class AuthInitializeResponse(DomainModel):
+    action: Literal["redirect", "register"]
+    redirect_to: str | None = None
+    register_role: SignupRole | None = None
+
+
+class CompleteRegistrationRequest(DomainModel):
+    role: SignupRole
+    full_name: NonEmptyText
+    email: EmailStr
+    avatar_url: str | None = None

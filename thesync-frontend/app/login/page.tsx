@@ -55,10 +55,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     ? params.error[0]
     : params.error;
   const errorMessage = getErrorMessage(errorCode);
-  const { appUser, isRegistrationComplete } = await getServerAuthState();
+  const { appUser, authUser } = await getServerAuthState();
 
-  if (!errorCode && isRegistrationComplete && appUser) {
+  if (!errorCode && appUser) {
     redirect(getDashboardPathForRole(appUser.app_role));
+  }
+
+  if (!errorCode && authUser) {
+    redirect("/register?flow=signup");
   }
 
   return (

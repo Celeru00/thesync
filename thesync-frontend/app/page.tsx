@@ -7,10 +7,14 @@ import { getServerAuthState } from "@/lib/auth/server";
 import { getDashboardPathForRole } from "@/lib/auth/profile";
 
 export default async function HomePage() {
-  const { appUser } = await getServerAuthState();
+  const { appUser, authUser } = await getServerAuthState();
 
   if (appUser) {
     redirect(getDashboardPathForRole(appUser.app_role));
+  }
+
+  if (authUser) {
+    redirect("/register?flow=signup");
   }
 
   return (

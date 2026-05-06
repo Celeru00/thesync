@@ -1,9 +1,7 @@
 import type { StudentDashboardData } from "@/types/dashboard";
 
+import { getApiBaseUrl } from "@/lib/api/env";
 import { createClient } from "@/lib/supabase/client";
-
-const BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 let supabaseClient: ReturnType<typeof createClient> | null = null;
 
@@ -42,7 +40,7 @@ async function buildHeaders(initHeaders?: HeadersInit) {
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = await buildHeaders(init?.headers);
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(`${getApiBaseUrl()}${path}`, {
     credentials: "include",
     ...init,
     headers,

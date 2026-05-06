@@ -1,24 +1,7 @@
-import type { SupabaseClient, User } from "@supabase/supabase-js";
+import type { User } from "@supabase/supabase-js";
 
 export type AppRole = "student" | "adviser" | "admin";
 export type SignupRole = Exclude<AppRole, "admin">;
-
-export type AppUserRecord = {
-  id: string;
-  email: string;
-  full_name: string;
-  avatar_url: string | null;
-  role_id: number;
-};
-
-export type AppUserAccount = AppUserRecord & {
-  role: AppRole;
-};
-
-export type RoleRecord = {
-  id: number;
-  name: string;
-};
 
 type AuthPrefill = {
   email: string;
@@ -33,48 +16,6 @@ function getMetadataValue(
   const value = metadata[key];
 
   return typeof value === "string" ? value : "";
-}
-
-const roleAliases = {
-  admin: ["admin", "administrator"],
-  adviser: ["adviser", "advisor"],
-  student: ["student"],
-} as const satisfies Record<AppRole, readonly string[]>;
-
-const roleIdByRole = {
-  admin: 3,
-  adviser: 2,
-  student: 1,
-} as const satisfies Record<AppRole, number>;
-
-function normalizeRoleName(value: string | null | undefined): AppRole | null {
-  if (!value) {
-    return null;
-  }
-
-  const normalizedValue = value.trim().toLowerCase();
-
-  for (const [role, aliases] of Object.entries(roleAliases) as Array<
-    [AppRole, readonly string[]]
-  >) {
-    if (aliases.includes(normalizedValue)) {
-      return role;
-    }
-  }
-
-  return null;
-}
-
-function getAppRoleById(roleId: number): AppRole | null {
-  return (
-    (
-      {
-        1: "student",
-        2: "adviser",
-        3: "admin",
-      } satisfies Record<number, AppRole>
-    )[roleId] ?? null
-  );
 }
 
 function getGoogleIdentityValue(user: User, key: string): string {
@@ -112,10 +53,6 @@ export function getDashboardPathForRole(role: AppRole) {
   }[role];
 }
 
-export function getRoleIdForAppRole(role: SignupRole | AppRole) {
-  return roleIdByRole[role];
-}
-
 export function getAuthAvatarUrl(user: User | null) {
   if (!user) {
     return null;
@@ -131,19 +68,6 @@ export function getAuthAvatarUrl(user: User | null) {
     getMetadataValue(metadata, "picture") ||
     null
   );
-}
-
-export function isRegistrationComplete(user: User | null) {
-  if (!user) {
-    return false;
-  }
-
-  const metadata =
-    user.user_metadata && typeof user.user_metadata === "object"
-      ? (user.user_metadata as Record<string, unknown>)
-      : {};
-
-  return metadata.registration_completed === true;
 }
 
 export function getAuthPrefill(user: User | null): AuthPrefill {
@@ -173,72 +97,4 @@ export function getAuthPrefill(user: User | null): AuthPrefill {
 
 export function buildFullName(firstName: string, lastName: string) {
   return `${firstName.trim()} ${lastName.trim()}`.trim();
-}
-
-export async function getAppUserWithRole(
-  supabase: SupabaseClient,
-  authUserId: string,
-) {
-  const { data: userRow, error: userError } = await supabase
-    .from("users")
-    .select("id, role_id")
-    .eq("id", authUserId)
-    .maybeSingle();
-
-  if (userError) {
-    return {
-      account: null,
-      errorCode: "account-lookup-failed" as const,
-    };
-  }
-
-  if (!userRow) {
-    return {
-      account: null,
-      errorCode: null,
-    };
-  }
-
-  const account = userRow as Pick<AppUserRecord, "id" | "role_id">;
-  const normalizedRole = getAppRoleById(account.role_id);
-
-  if (normalizedRole) {
-    return {
-      account: {
-        ...account,
-        role: normalizedRole,
-      } as AppUserAccount,
-      errorCode: null,
-    };
-  }
-
-  const { data: roleRow, error: roleError } = await supabase
-    .from("roles")
-    .select("id, name")
-    .eq("id", account.role_id)
-    .maybeSingle();
-
-  if (roleError || !roleRow) {
-    return {
-      account: null,
-      errorCode: "role-lookup-failed" as const,
-    };
-  }
-
-  const normalizedRoleFromTable = normalizeRoleName(roleRow.name);
-
-  if (!normalizedRoleFromTable) {
-    return {
-      account: null,
-      errorCode: "role-not-supported" as const,
-    };
-  }
-
-  return {
-    account: {
-      ...account,
-      role: normalizedRoleFromTable,
-    } as AppUserAccount,
-    errorCode: null,
-  };
 }

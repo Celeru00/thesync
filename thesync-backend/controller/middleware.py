@@ -9,8 +9,8 @@ from repository.auth import (
     AuthConfigurationError,
     AuthenticationError,
     extract_bearer_token,
+    resolve_authenticated_session,
 )
-from usecase.auth import authenticate_access_token
 
 
 class SupabaseAuthMiddleware(BaseHTTPMiddleware):
@@ -28,7 +28,7 @@ class SupabaseAuthMiddleware(BaseHTTPMiddleware):
             if access_token is None:
                 return await call_next(request)
 
-            claims, current_user = authenticate_access_token(access_token)
+            claims, current_user = resolve_authenticated_session(access_token)
         except AuthenticationError as exc:
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,

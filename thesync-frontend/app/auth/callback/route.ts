@@ -1,12 +1,7 @@
 import { NextResponse } from "next/server";
 
-import {
-  getAppUserWithRole,
-  getDashboardPathForRole,
-  isAppRole,
-  isRegistrationComplete,
-  isSignupRole,
-} from "@/lib/auth/profile";
+import { BackendAuthError, initializeBackendAuth } from "@/lib/auth/backend";
+import { isAppRole, isSignupRole } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
 const DEFAULT_REDIRECT_PATH = "/student";
@@ -30,36 +25,15 @@ function getRegisterUrl(origin: string, requestedSignupRole: string | null) {
   return registerUrl;
 }
 
-async function finalizeProvisionedSession(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  role: "student" | "adviser" | "admin",
-) {
-  const { error: metadataError } = await supabase.auth.updateUser({
-    data: {
-      app_role: role,
-      registration_completed: true,
-    },
-  });
-
-  if (metadataError) {
-    return metadataError;
-  }
-
-  const { error: refreshError } = await supabase.auth.refreshSession();
-  return refreshError;
-}
-
-async function ensureAuthUserProfile(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-) {
-  const { error } = await supabase.rpc("ensure_auth_user_profile");
-  return error;
+function getLoginUrl(origin: string, errorCode: string) {
+  const loginUrl = new URL("/login", origin);
+  loginUrl.searchParams.set("error", errorCode);
+  return loginUrl;
 }
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const loginUrl = new URL("/login", requestUrl.origin);
   const flow = requestUrl.searchParams.get("flow");
   const requestedRole = requestUrl.searchParams.get("role");
   const isSignupFlow = flow === "signup";
@@ -68,138 +42,72 @@ export async function GET(request: Request) {
     : null;
 
   if (!code) {
-    loginUrl.searchParams.set("error", "missing-code");
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.redirect(
+      getLoginUrl(requestUrl.origin, "missing-code"),
+    );
   }
 
   const supabase = await createClient();
   const { error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error) {
-    loginUrl.searchParams.set("error", "google-auth-failed");
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.redirect(
+      getLoginUrl(requestUrl.origin, "google-auth-failed"),
+    );
   }
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
+  const [
+    {
+      data: { user },
+      error: userError,
+    },
+    {
+      data: { session },
+    },
+  ] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
 
-  if (userError || !user) {
-    loginUrl.searchParams.set("error", "google-auth-failed");
-    return NextResponse.redirect(loginUrl);
+  if (userError || !user || !session?.access_token) {
+    return NextResponse.redirect(
+      getLoginUrl(requestUrl.origin, "google-auth-failed"),
+    );
   }
 
-  if (requestedRole !== "admin") {
-    const ensureError = await ensureAuthUserProfile(supabase);
+  try {
+    const authState = await initializeBackendAuth(session.access_token, {
+      flow: isSignupFlow ? "signup" : "login",
+      requested_role: isAppRole(requestedRole) ? requestedRole : null,
+    });
 
-    if (ensureError) {
-      console.error("Failed to ensure auth user profile", ensureError);
-    }
-  }
-
-  const registrationComplete = isRegistrationComplete(user);
-  const { account, errorCode } = await getAppUserWithRole(supabase, user.id);
-
-  if (errorCode) {
-    if (isSignupFlow || requestedSignupRole) {
+    if (authState.action === "redirect") {
       return NextResponse.redirect(
-        getRegisterUrl(requestUrl.origin, requestedSignupRole),
+        new URL(
+          authState.redirect_to ??
+            getSafeNextPath(requestUrl.searchParams.get("next")),
+          requestUrl.origin,
+        ),
       );
     }
 
-    if (requestedRole === "admin") {
-      await supabase.auth.signOut();
-      loginUrl.searchParams.set("error", "admin-not-provisioned");
-      return NextResponse.redirect(loginUrl);
-    }
-
-    if (requestedRole && isSignupRole(requestedRole)) {
-      return NextResponse.redirect(
-        getRegisterUrl(requestUrl.origin, requestedRole),
-      );
-    }
-
-    loginUrl.searchParams.set("error", errorCode);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  if (account) {
-    if (!registrationComplete) {
-      if (account.role === "admin") {
-        if (requestedRole && requestedRole !== "admin") {
-          loginUrl.searchParams.set("error", "role-mismatch");
-          return NextResponse.redirect(loginUrl);
-        }
-
-        const finalizeError = await finalizeProvisionedSession(
-          supabase,
-          account.role,
-        );
-
-        if (finalizeError) {
-          loginUrl.searchParams.set("error", "registration-sync-failed");
-          return NextResponse.redirect(loginUrl);
-        }
-
-        return NextResponse.redirect(
-          new URL(getDashboardPathForRole(account.role), requestUrl.origin),
-        );
-      }
-
-      if (requestedRole === "admin") {
+    return NextResponse.redirect(
+      getRegisterUrl(
+        requestUrl.origin,
+        authState.register_role ?? requestedSignupRole,
+      ),
+    );
+  } catch (error) {
+    if (error instanceof BackendAuthError) {
+      if (error.code === "admin-not-provisioned") {
         await supabase.auth.signOut();
-        loginUrl.searchParams.set("error", "admin-not-provisioned");
-        return NextResponse.redirect(loginUrl);
       }
 
-      const pendingSignupRole =
-        requestedSignupRole ??
-        (account.role === "student" || account.role === "adviser"
-          ? account.role
-          : null);
-
       return NextResponse.redirect(
-        getRegisterUrl(requestUrl.origin, pendingSignupRole),
+        getLoginUrl(
+          requestUrl.origin,
+          error.code ?? "registration-sync-failed",
+        ),
       );
     }
 
-    if (isSignupFlow) {
-      return NextResponse.redirect(
-        getRegisterUrl(requestUrl.origin, requestedSignupRole),
-      );
-    }
-
-    if (
-      requestedRole &&
-      isAppRole(requestedRole) &&
-      requestedRole !== account.role
-    ) {
-      loginUrl.searchParams.set("error", "role-mismatch");
-      return NextResponse.redirect(loginUrl);
-    }
-
-    return NextResponse.redirect(
-      new URL(getDashboardPathForRole(account.role), requestUrl.origin),
-    );
+    throw error;
   }
-
-  if (requestedRole === "admin") {
-    await supabase.auth.signOut();
-    loginUrl.searchParams.set("error", "admin-not-provisioned");
-    return NextResponse.redirect(loginUrl);
-  }
-
-  if (isSignupFlow || requestedRole) {
-    return NextResponse.redirect(
-      getRegisterUrl(requestUrl.origin, requestedSignupRole),
-    );
-  }
-
-  return NextResponse.redirect(
-    new URL(
-      getSafeNextPath(requestUrl.searchParams.get("next")),
-      requestUrl.origin,
-    ),
-  );
 }
