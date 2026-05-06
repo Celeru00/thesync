@@ -6,13 +6,16 @@ from model.auth import (
     AuthFlow,
     AuthInitializeResponse,
     CompleteRegistrationRequest,
+    DeleteAccountResponse,
     SignupRole,
     SupabaseClaims,
 )
 from repository.auth import (
+    AccountDeletionError,
     AuthServiceUnavailableError,
     ProvisioningError,
     complete_application_user_registration,
+    delete_application_user_account,
     ensure_application_user,
     get_application_user_state,
     get_authenticated_user,
@@ -140,6 +143,7 @@ def complete_registration(
             email=str(payload.email),
             avatar_url=payload.avatar_url,
             identifier=payload.identifier,
+            degree_program=payload.degree_program,
             department=payload.department,
         )
     except ProvisioningError as exc:
@@ -154,3 +158,22 @@ def complete_registration(
             str(exc),
             status_code=503,
         ) from exc
+
+
+def delete_current_account(current_user: AuthenticatedUser) -> DeleteAccountResponse:
+    try:
+        delete_application_user_account(current_user.id)
+    except AccountDeletionError as exc:
+        raise AuthFlowError(
+            "account-deletion-failed",
+            str(exc),
+            status_code=502,
+        ) from exc
+    except AuthServiceUnavailableError as exc:
+        raise AuthFlowError(
+            "auth-backend-unavailable",
+            str(exc),
+            status_code=503,
+        ) from exc
+
+    return DeleteAccountResponse(message="Your account has been deleted.")

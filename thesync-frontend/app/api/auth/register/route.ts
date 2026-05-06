@@ -35,6 +35,7 @@ export async function POST(request: Request) {
     email: string;
     avatar_url?: string | null;
     identifier: string;
+    degree_program?: string | null;
     department: string;
   };
 
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
     role: payload.role,
     hasAvatar: Boolean(payload.avatar_url),
     hasIdentifier: Boolean(payload.identifier?.trim()),
+    hasDegreeProgram: Boolean(payload.degree_program?.trim()),
     hasDepartment: Boolean(payload.department?.trim()),
     hasAccessToken: Boolean(session.access_token),
   });

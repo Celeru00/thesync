@@ -6,6 +6,7 @@ export interface User {
   email: string;
   avatar_url?: string | null;
   identifier?: string | null;
+  degree_program?: string | null;
   department?: string | null;
   created_at: string;
 }

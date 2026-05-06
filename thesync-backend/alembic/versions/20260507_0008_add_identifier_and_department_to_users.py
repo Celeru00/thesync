@@ -1,4 +1,4 @@
-"""Add identifier and department fields to users.
+"""Add identifier, degree program, and department fields to users.
 
 Revision ID: 202605070008
 Revises: 202605060007
@@ -17,11 +17,33 @@ branch_labels = None
 depends_on = None
 
 
+def _existing_user_columns() -> set[str]:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    return {column["name"] for column in inspector.get_columns("users")}
+
+
 def upgrade() -> None:
-    op.add_column("users", sa.Column("identifier", sa.Text(), nullable=True))
-    op.add_column("users", sa.Column("department", sa.Text(), nullable=True))
+    existing_columns = _existing_user_columns()
+
+    if "identifier" not in existing_columns:
+        op.add_column("users", sa.Column("identifier", sa.Text(), nullable=True))
+
+    if "degree_program" not in existing_columns:
+        op.add_column("users", sa.Column("degree_program", sa.Text(), nullable=True))
+
+    if "department" not in existing_columns:
+        op.add_column("users", sa.Column("department", sa.Text(), nullable=True))
 
 
 def downgrade() -> None:
-    op.drop_column("users", "department")
-    op.drop_column("users", "identifier")
+    existing_columns = _existing_user_columns()
+
+    if "department" in existing_columns:
+        op.drop_column("users", "department")
+
+    if "degree_program" in existing_columns:
+        op.drop_column("users", "degree_program")
+
+    if "identifier" in existing_columns:
+        op.drop_column("users", "identifier")

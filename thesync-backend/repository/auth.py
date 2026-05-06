@@ -7,7 +7,7 @@ import jwt
 from jwt import PyJWKClient
 from jwt.exceptions import InvalidTokenError, PyJWKClientError
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import joinedload
 
@@ -21,7 +21,19 @@ from model.auth import (
 )
 from repository.config import get_settings
 from repository.database import SessionLocal
-from repository.orm import UserRecord
+from repository.orm import (
+    AuditLogRecord,
+    AvailabilitySlotRecord,
+    GoogleCalendarConnectionRecord,
+    NotificationRecord,
+    PanelistAssignmentRecord,
+    ScheduleRecord,
+    UserRecord,
+)
+from repository.supabase_client import (
+    SupabaseClientConfigurationError,
+    get_supabase_admin_client,
+)
 
 PENDING_EMAIL_DOMAIN = "@pending.local"
 ROLE_ID_BY_APP_ROLE: dict[AppRole, int] = {
@@ -50,6 +62,10 @@ class ProvisioningError(RuntimeError):
 
 class AuthServiceUnavailableError(RuntimeError):
     """Raised when the auth layer cannot reach its persistence dependencies."""
+
+
+class AccountDeletionError(RuntimeError):
+    """Raised when the current account cannot be deleted cleanly."""
 
 
 def extract_bearer_token(authorization: str | None) -> str | None:
@@ -203,6 +219,15 @@ def _resolve_identifier(claims: SupabaseClaims) -> str | None:
     )
 
 
+def _resolve_degree_program(claims: SupabaseClaims) -> str | None:
+    return _get_metadata_value(
+        claims,
+        "degree_program",
+        "degreeProgram",
+        "program",
+    )
+
+
 def _resolve_department(claims: SupabaseClaims) -> str | None:
     return _get_metadata_value(claims, "department", "department_code", "departmentCode")
 
@@ -257,6 +282,7 @@ def _to_authenticated_user(user_record: UserRecord) -> AuthenticatedUser:
             "email": user_record.email,
             "avatar_url": user_record.avatar_url,
             "identifier": user_record.identifier,
+            "degree_program": user_record.degree_program,
             "department": user_record.department,
             "created_at": user_record.created_at,
             "app_role": app_role,
@@ -271,6 +297,7 @@ def _ensure_user_record(session, claims: SupabaseClaims) -> UserRecord:
     resolved_email = _resolve_email(claims) or f"{claims.sub}{PENDING_EMAIL_DOMAIN}"
     resolved_avatar_url = _resolve_avatar_url(claims)
     resolved_identifier = _resolve_identifier(claims)
+    resolved_degree_program = _resolve_degree_program(claims)
     resolved_department = _resolve_department(claims)
 
     if user_record is None:
@@ -281,6 +308,7 @@ def _ensure_user_record(session, claims: SupabaseClaims) -> UserRecord:
             email=resolved_email,
             avatar_url=resolved_avatar_url,
             identifier=resolved_identifier,
+            degree_program=resolved_degree_program,
             department=resolved_department,
             registration_completed=False,
         )
@@ -299,6 +327,9 @@ def _ensure_user_record(session, claims: SupabaseClaims) -> UserRecord:
 
     if resolved_identifier and not user_record.identifier:
         user_record.identifier = resolved_identifier
+
+    if resolved_degree_program and not user_record.degree_program:
+        user_record.degree_program = resolved_degree_program
 
     if resolved_department and not user_record.department:
         user_record.department = resolved_department
@@ -374,8 +405,14 @@ def complete_application_user_registration(
     email: str,
     avatar_url: str | None,
     identifier: str,
+    degree_program: str | None,
     department: str,
 ) -> AuthenticatedUser:
+    normalized_degree_program = _normalize_optional_text(degree_program)
+
+    if role == "student" and not normalized_degree_program:
+        raise ProvisioningError("Degree program is required for student registrations.")
+
     try:
         with SessionLocal() as session:
             user_record = _ensure_user_record(session, claims)
@@ -386,6 +423,7 @@ def complete_application_user_registration(
                 claims
             )
             user_record.identifier = identifier.strip()
+            user_record.degree_program = normalized_degree_program if role == "student" else None
             user_record.department = department.strip()
             user_record.registration_completed = True
             session.commit()
@@ -408,3 +446,72 @@ def complete_application_user_registration(
         raise ProvisioningError("We couldn't create your account right now. Please try again.")
 
     return _to_authenticated_user(user_record)
+
+
+def delete_application_user_account(user_id: UUID) -> None:
+    try:
+        admin_client = get_supabase_admin_client()
+    except SupabaseClientConfigurationError as exc:
+        raise AuthServiceUnavailableError(
+            "Account deletion is temporarily unavailable. Check Supabase admin configuration."
+        ) from exc
+
+    try:
+        with SessionLocal() as session:
+            owned_schedule_ids = list(
+                session.scalars(
+                    select(ScheduleRecord.id).where(
+                        or_(
+                            ScheduleRecord.student_id == user_id,
+                            ScheduleRecord.adviser_id == user_id,
+                        )
+                    )
+                )
+            )
+
+            if owned_schedule_ids:
+                session.execute(
+                    delete(NotificationRecord).where(
+                        NotificationRecord.schedule_id.in_(owned_schedule_ids)
+                    )
+                )
+                session.execute(
+                    delete(AuditLogRecord).where(AuditLogRecord.schedule_id.in_(owned_schedule_ids))
+                )
+                session.execute(
+                    delete(PanelistAssignmentRecord).where(
+                        PanelistAssignmentRecord.schedule_id.in_(owned_schedule_ids)
+                    )
+                )
+                session.execute(
+                    delete(ScheduleRecord).where(ScheduleRecord.id.in_(owned_schedule_ids))
+                )
+
+            session.execute(
+                delete(PanelistAssignmentRecord).where(
+                    PanelistAssignmentRecord.panelist_id == user_id
+                )
+            )
+            session.execute(delete(NotificationRecord).where(NotificationRecord.user_id == user_id))
+            session.execute(delete(AuditLogRecord).where(AuditLogRecord.changed_by == user_id))
+            session.execute(
+                delete(AvailabilitySlotRecord).where(AvailabilitySlotRecord.adviser_id == user_id)
+            )
+            session.execute(
+                delete(GoogleCalendarConnectionRecord).where(
+                    GoogleCalendarConnectionRecord.user_id == user_id
+                )
+            )
+            session.execute(delete(UserRecord).where(UserRecord.id == user_id))
+            session.flush()
+
+            admin_client.auth.admin.delete_user(str(user_id))
+            session.commit()
+    except SQLAlchemyError as exc:
+        _debug_log("account_delete_db_failed", user_id=str(user_id), reason=repr(exc))
+        _raise_auth_storage_unavailable(exc)
+    except Exception as exc:
+        _debug_log("account_delete_auth_failed", user_id=str(user_id), reason=repr(exc))
+        raise AccountDeletionError(
+            "We couldn't delete your account right now. Please try again."
+        ) from exc

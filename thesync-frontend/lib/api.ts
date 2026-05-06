@@ -121,6 +121,7 @@ export type AdviserDirectoryUser = {
   email: string;
   avatar_url: string | null;
   identifier: string | null;
+  degree_program: string | null;
   department: string | null;
   created_at: ISODateTimeString;
 };

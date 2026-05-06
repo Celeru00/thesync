@@ -111,6 +111,7 @@ class UserRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     email: Mapped[str] = mapped_column(Text, nullable=False)
     avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     identifier: Mapped[str | None] = mapped_column(Text, nullable=True)
+    degree_program: Mapped[str | None] = mapped_column(Text, nullable=True)
     department: Mapped[str | None] = mapped_column(Text, nullable=True)
     registration_completed: Mapped[bool] = mapped_column(
         Boolean,

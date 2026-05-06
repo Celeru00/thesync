@@ -1,9 +1,18 @@
-import { Building2, IdCard, Mail, ShieldCheck, UserRound } from "lucide-react";
+import {
+  BookOpenText,
+  Building2,
+  IdCard,
+  Mail,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
 
 import { SettingsSection } from "@/components/settings/settings-section";
+import { cn } from "@/lib/utils";
 
 type ProfileFormProps = {
   departmentValue: string;
+  degreeProgramValue?: string | null;
   email: string;
   identifierLabel: string;
   identifierValue: string;
@@ -34,6 +43,7 @@ function ProfileDetail({
 
 export function ProfileForm({
   departmentValue,
+  degreeProgramValue,
   email,
   identifierLabel,
   identifierValue,
@@ -52,11 +62,27 @@ export function ProfileForm({
           label="Account Role"
           value={roleLabel}
         />
+      </div>
+      <div
+        className={cn(
+          "mt-4 grid gap-4",
+          degreeProgramValue ? "md:grid-cols-2" : "md:grid-cols-1",
+        )}
+      >
         <ProfileDetail
           icon={IdCard}
           label={identifierLabel}
           value={identifierValue}
         />
+        {degreeProgramValue ? (
+          <ProfileDetail
+            icon={BookOpenText}
+            label="Degree Program"
+            value={degreeProgramValue}
+          />
+        ) : null}
+      </div>
+      <div className="mt-4">
         <ProfileDetail
           icon={Building2}
           label="Department"
