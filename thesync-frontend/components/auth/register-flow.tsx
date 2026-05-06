@@ -17,7 +17,7 @@ import {
   buildFullName,
   getAuthAvatarUrl,
   getDashboardPathForRole,
-  getRoleByName,
+  getRoleIdForAppRole,
   type SignupRole,
 } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/client";
@@ -165,19 +165,7 @@ export function RegisterFlow({
       return;
     }
 
-    const { data: roleRow, error: roleError } = await getRoleByName(
-      supabase,
-      role,
-    );
-
-    if (roleError || !roleRow) {
-      console.error(roleError);
-      setSubmitError(
-        "Your role could not be resolved. Check the roles table and try again.",
-      );
-      setIsSubmitting(false);
-      return;
-    }
+    const roleId = getRoleIdForAppRole(role);
 
     const { error } = await supabase.from("users").upsert(
       {
@@ -185,7 +173,7 @@ export function RegisterFlow({
         email: user.email ?? email.trim(),
         full_name: buildFullName(profile.firstName, profile.lastName),
         id: user.id,
-        role_id: roleRow.id,
+        role_id: roleId,
       },
       {
         onConflict: "id",
@@ -195,7 +183,7 @@ export function RegisterFlow({
     if (error) {
       console.error(error);
       setSubmitError(
-        "Your account details could not be saved. Confirm the users and roles tables are configured in Supabase.",
+        "We couldn't create your account right now. Please try again.",
       );
       setIsSubmitting(false);
       return;

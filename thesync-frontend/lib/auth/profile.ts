@@ -41,6 +41,12 @@ const roleAliases = {
   student: ["student"],
 } as const satisfies Record<AppRole, readonly string[]>;
 
+const roleIdByRole = {
+  admin: 3,
+  adviser: 2,
+  student: 1,
+} as const satisfies Record<AppRole, number>;
+
 function normalizeRoleName(value: string | null | undefined): AppRole | null {
   if (!value) {
     return null;
@@ -57,6 +63,18 @@ function normalizeRoleName(value: string | null | undefined): AppRole | null {
   }
 
   return null;
+}
+
+function getAppRoleById(roleId: number): AppRole | null {
+  return (
+    (
+      {
+        1: "student",
+        2: "adviser",
+        3: "admin",
+      } satisfies Record<number, AppRole>
+    )[roleId] ?? null
+  );
 }
 
 function getGoogleIdentityValue(user: User, key: string): string {
@@ -92,6 +110,10 @@ export function getDashboardPathForRole(role: AppRole) {
     adviser: "/adviser",
     student: "/student",
   }[role];
+}
+
+export function getRoleIdForAppRole(role: SignupRole | AppRole) {
+  return roleIdByRole[role];
 }
 
 export function getAuthAvatarUrl(user: User | null) {
@@ -153,30 +175,6 @@ export function buildFullName(firstName: string, lastName: string) {
   return `${firstName.trim()} ${lastName.trim()}`.trim();
 }
 
-export async function getRoleByName(
-  supabase: SupabaseClient,
-  roleName: SignupRole | AppRole,
-) {
-  const { data, error } = await supabase.from("roles").select("id, name");
-
-  if (error) {
-    return {
-      data: null,
-      error,
-    };
-  }
-
-  const matchingRole =
-    (data as RoleRecord[]).find(
-      (role) => normalizeRoleName(role.name) === roleName,
-    ) ?? null;
-
-  return {
-    data: matchingRole,
-    error: null,
-  };
-}
-
 export async function getAppUserWithRole(
   supabase: SupabaseClient,
   authUserId: string,
@@ -202,6 +200,18 @@ export async function getAppUserWithRole(
   }
 
   const account = userRow as Pick<AppUserRecord, "id" | "role_id">;
+  const normalizedRole = getAppRoleById(account.role_id);
+
+  if (normalizedRole) {
+    return {
+      account: {
+        ...account,
+        role: normalizedRole,
+      } as AppUserAccount,
+      errorCode: null,
+    };
+  }
+
   const { data: roleRow, error: roleError } = await supabase
     .from("roles")
     .select("id, name")
@@ -215,9 +225,9 @@ export async function getAppUserWithRole(
     };
   }
 
-  const normalizedRole = normalizeRoleName(roleRow.name);
+  const normalizedRoleFromTable = normalizeRoleName(roleRow.name);
 
-  if (!normalizedRole) {
+  if (!normalizedRoleFromTable) {
     return {
       account: null,
       errorCode: "role-not-supported" as const,
@@ -227,7 +237,7 @@ export async function getAppUserWithRole(
   return {
     account: {
       ...account,
-      role: normalizedRole,
+      role: normalizedRoleFromTable,
     } as AppUserAccount,
     errorCode: null,
   };
