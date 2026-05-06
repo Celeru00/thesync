@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:3000"
     sqlalchemy_echo: bool = False
     supabase_url: str | None = None
+    supabase_service_role_key: str | None = None
     supabase_jwt_audience: str = "authenticated"
     supabase_jwt_secret: str | None = None
     supabase_jwt_leeway_seconds: int = 60

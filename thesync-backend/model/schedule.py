@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import PositiveInt, field_validator, model_validator
@@ -36,55 +36,50 @@ class Schedule(DomainModel):
         return self
 
 
-class PanelistAssignment(DomainModel):
-    """Assignment of a panelist to a schedule."""
+class ScheduleListFilters(DomainModel):
+    """Filters and pagination for schedule list queries."""
 
-    id: UUID
-    schedule_id: UUID
-    panelist_id: UUID
-    invite_status_id: PositiveInt
+    status_id: PositiveInt | None = None
+    type_id: PositiveInt | None = None
+    from_date: date | datetime | None = None
+    to_date: date | datetime | None = None
+    page: PositiveInt = 1
+    page_size: PositiveInt = 20
 
 
-class AvailabilitySlot(DomainModel):
-    """Time window made available by an adviser."""
+class ScheduleCreateRequest(DomainModel):
+    """Payload for creating a schedule request."""
 
-    id: UUID
     adviser_id: UUID
-    slot_start: datetime
-    slot_end: datetime
-    is_blocked: bool = False
-
-    @model_validator(mode="after")
-    def validate_time_range(self) -> AvailabilitySlot:
-        if self.slot_end <= self.slot_start:
-            raise ValueError("slot_end must be later than slot_start.")
-
-        return self
+    type_id: PositiveInt
+    topic: NonEmptyText
+    scheduled_at: datetime | None = None
 
 
-class Notification(DomainModel):
-    """User-facing notification emitted by schedule events."""
+class ScheduleApproveRequest(DomainModel):
+    """Payload for approving a schedule."""
 
-    id: UUID
-    user_id: UUID
-    schedule_id: UUID | None = None
-    message: NonEmptyText
-    is_read: bool = False
-    created_at: datetime
+    scheduled_at: datetime | None = None
 
 
-class AuditLog(DomainModel):
-    """Immutable schedule status transition record."""
+class ScheduleRejectRequest(DomainModel):
+    """Payload for rejecting a schedule."""
 
-    id: UUID
-    schedule_id: UUID
-    changed_by: UUID
-    previous_status_id: PositiveInt | None = None
-    new_status_id: PositiveInt
     remarks: str | None = None
-    changed_at: datetime
 
     @field_validator("remarks", mode="before")
     @classmethod
-    def normalize_remarks(cls, value: str | None) -> str | None:
+    def normalize_rejection_remarks(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
+
+
+class ScheduleRescheduleRequest(DomainModel):
+    """Payload for rescheduling a schedule."""
+
+    scheduled_at: datetime
+    remarks: str | None = None
+
+    @field_validator("remarks", mode="before")
+    @classmethod
+    def normalize_reschedule_remarks(cls, value: str | None) -> str | None:
         return normalize_optional_text(value)

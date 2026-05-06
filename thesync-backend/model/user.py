@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import EmailStr, PositiveInt, field_validator
+from pydantic import EmailStr, Field, PositiveInt, field_validator
 
 from model.base import DomainModel, NonEmptyText, normalize_optional_text
 
@@ -13,6 +13,7 @@ class User(DomainModel):
 
     id: UUID
     role_id: PositiveInt
+    role_name: NonEmptyText | None = None
     full_name: NonEmptyText
     email: EmailStr
     avatar_url: str | None = None
@@ -27,3 +28,18 @@ class User(DomainModel):
     @classmethod
     def normalize_avatar_url(cls, value: str | None) -> str | None:
         return normalize_optional_text(value)
+
+
+class UserResponse(User):
+    """Expanded user response returned by API-facing models."""
+
+
+class ReportsResult(DomainModel):
+    """Aggregated metrics used by the admin dashboard."""
+
+    total_consultations: int = 0
+    total_defenses: int = 0
+    approval_rate: float = 0.0
+    avg_time_to_approval_hours: float | None = None
+    by_status: dict[str, int] = Field(default_factory=dict)
+    by_day_of_week: dict[str, int] = Field(default_factory=dict)
