@@ -182,6 +182,23 @@ class ScheduleRepository:
 
         return _to_schedule(row)
 
+    def get_status_id_by_name(self, status_name: str) -> int | None:
+        response = (
+            self._client.table("schedule_statuses")
+            .select("id")
+            .eq("name", status_name.strip().lower())
+            .execute()
+        )
+        row = _first_row(response.data)
+
+        if row is None:
+            return None
+
+        try:
+            return int(row["id"])
+        except (KeyError, TypeError, ValueError):
+            return None
+
     def list_by_student(
         self,
         student_id: UUID | str,
@@ -206,6 +223,34 @@ class ScheduleRepository:
 
     def list_all(self, filters: ScheduleListFilters) -> PaginatedResult[Schedule]:
         return self._list_with_filters(filters=filters)
+
+    def adviser_has_schedule_conflict(
+        self,
+        *,
+        adviser_id: UUID | str,
+        scheduled_at: datetime,
+        excluded_schedule_id: UUID | str | None = None,
+        status_ids: list[int] | None = None,
+    ) -> bool:
+        query = (
+            self._client.table("schedules")
+            .select("id", count="exact")
+            .eq("adviser_id", str(adviser_id))
+            .eq("scheduled_at", scheduled_at.isoformat())
+        )
+
+        if excluded_schedule_id is not None:
+            query = query.neq("id", str(excluded_schedule_id))
+
+        if status_ids:
+            query = query.in_("status_id", status_ids)
+
+        response = query.execute()
+        total = getattr(response, "count", None)
+        if isinstance(total, int):
+            return total > 0
+
+        return bool(_rows(response.data))
 
     def update_status(
         self,

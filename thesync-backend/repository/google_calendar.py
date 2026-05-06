@@ -7,6 +7,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
+from uuid import uuid4
 
 from repository.config import Settings, get_settings
 from repository.orm import GoogleCalendarConnectionRecord
@@ -289,7 +290,14 @@ class GoogleCalendarClient:
 
         return self._refresh_access_token()
 
-    def _request_json(self, path: str, *, query: dict[str, str] | None = None) -> dict[str, Any]:
+    def _request_json(
+        self,
+        path: str,
+        *,
+        query: dict[str, str] | None = None,
+        method: str = "GET",
+        body: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         access_token = self._get_valid_access_token()
         request_url = (
             f"{GOOGLE_CALENDAR_API_BASE_URL}/calendars/"
@@ -299,14 +307,24 @@ class GoogleCalendarClient:
         if query:
             request_url = f"{request_url}?{urlencode(query)}"
 
-        request = Request(
-            request_url,
-            headers={
-                "Authorization": f"Bearer {access_token}",
+        request_body = json.dumps(body).encode("utf-8") if body is not None else None
+
+        def build_request(token: str) -> Request:
+            headers = {
+                "Authorization": f"Bearer {token}",
                 "Accept": "application/json",
-            },
-            method="GET",
-        )
+            }
+            if request_body is not None:
+                headers["Content-Type"] = "application/json"
+
+            return Request(
+                request_url,
+                data=request_body,
+                headers=headers,
+                method=method,
+            )
+
+        request = build_request(access_token)
 
         try:
             with urlopen(request, timeout=15) as response:  # nosec B310
@@ -314,14 +332,7 @@ class GoogleCalendarClient:
         except HTTPError as exc:
             if exc.code in {401, 403}:
                 self._refresh_access_token()
-                retry_request = Request(
-                    request_url,
-                    headers={
-                        "Authorization": f"Bearer {self._connection.access_token}",
-                        "Accept": "application/json",
-                    },
-                    method="GET",
-                )
+                retry_request = build_request(self._connection.access_token)
                 try:
                     with urlopen(retry_request, timeout=15) as response:  # nosec B310
                         return json.loads(response.read().decode("utf-8"))
@@ -398,5 +409,68 @@ class GoogleCalendarClient:
             calendar_id=self._connection.calendar_id,
             event_id=event.event_id,
             status=event.status,
+        )
+        return event
+
+    def create_event(
+        self,
+        *,
+        summary: str,
+        starts_at: datetime,
+        ends_at: datetime,
+        description: str | None = None,
+    ) -> GoogleCalendarRemoteEvent:
+        payload = self._request_json(
+            "events",
+            method="POST",
+            query={"conferenceDataVersion": "1"},
+            body={
+                "summary": summary,
+                "description": description,
+                "start": {"dateTime": starts_at.astimezone(UTC).isoformat()},
+                "end": {"dateTime": ends_at.astimezone(UTC).isoformat()},
+                "conferenceData": {
+                    "createRequest": {
+                        "requestId": str(uuid4()),
+                        "conferenceSolutionKey": {"type": "hangoutsMeet"},
+                    }
+                },
+            },
+        )
+        event = _build_remote_event(payload)
+        _debug_log(
+            "event_created",
+            user_id=str(self._connection.user_id),
+            calendar_id=self._connection.calendar_id,
+            event_id=event.event_id,
+        )
+        return event
+
+    def update_event(
+        self,
+        event_id: str,
+        *,
+        summary: str,
+        starts_at: datetime,
+        ends_at: datetime,
+        description: str | None = None,
+    ) -> GoogleCalendarRemoteEvent:
+        payload = self._request_json(
+            f"events/{quote(event_id, safe='')}",
+            method="PATCH",
+            query={"conferenceDataVersion": "1"},
+            body={
+                "summary": summary,
+                "description": description,
+                "start": {"dateTime": starts_at.astimezone(UTC).isoformat()},
+                "end": {"dateTime": ends_at.astimezone(UTC).isoformat()},
+            },
+        )
+        event = _build_remote_event(payload)
+        _debug_log(
+            "event_updated",
+            user_id=str(self._connection.user_id),
+            calendar_id=self._connection.calendar_id,
+            event_id=event.event_id,
         )
         return event
