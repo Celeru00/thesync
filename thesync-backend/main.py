@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from controller.availability import router as availability_router
 from controller.auth import router as auth_router
 from controller.availability import router as availability_router
 from controller.calendar import router as calendar_router
@@ -35,7 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(SupabaseAuthMiddleware)
-
+app.include_router(availability_router, prefix="/api")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(calendar_router, prefix="/api")
