@@ -64,7 +64,7 @@ class ScheduleService(Protocol):
         self,
         current_user: AuthenticatedUser,
         schedule_id: UUID,
-    ) -> None: ...
+    ) -> Schedule: ...
 
 
 class ScheduleStatusService(Protocol):
