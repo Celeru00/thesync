@@ -33,6 +33,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -58,9 +65,27 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
 });
 
+const statusOptions: Array<{
+  label: string;
+  value: ScheduleQueueStatus | "all";
+}> = [
+  { label: "All Status", value: "all" },
+  { label: "Approved", value: "approved" },
+  { label: "Pending", value: "pending" },
+  { label: "Rescheduled", value: "rescheduled" },
+  { label: "Completed", value: "completed" },
+  { label: "Rejected", value: "rejected" },
+  { label: "Cancelled", value: "cancelled" },
+];
+
 export default function AdviserConsultationsPage() {
   const [searchTerm, setSearchTerm] = useState("");
-  const { data, error, isLoading } = useSchedules({ status: "pending" });
+  const [statusFilter, setStatusFilter] = useState<ScheduleQueueStatus | "all">(
+    "all",
+  );
+  const { data, error, isLoading } = useSchedules(
+    statusFilter === "all" ? undefined : { status: statusFilter },
+  );
   const approveScheduleMutation = useApproveSchedule();
   const rejectScheduleMutation = useRejectSchedule();
   const rescheduleScheduleMutation = useRescheduleSchedule();
@@ -190,14 +215,14 @@ export default function AdviserConsultationsPage() {
   return (
     <section className="flex w-full flex-col gap-8">
       <header className="space-y-2">
-        <h1 className="text-heading">Pending Consultation Queue</h1>
+        <h1 className="text-heading">Consultation Requests</h1>
         <p className="max-w-3xl text-[1.05rem] leading-8 text-content-muted">
-          Review pending consultation requests from your advisees
+          Review and manage consultation requests from students
         </p>
       </header>
 
       <ListWrapper
-        title="Pending Requests"
+        title="All Requests"
         filters={
           <FilterBar>
             <SearchInput
@@ -206,6 +231,23 @@ export default function AdviserConsultationsPage() {
               placeholder="Search requests"
               wrapperClassName="md:max-w-sm"
             />
+            <Select
+              value={statusFilter}
+              onValueChange={(value) =>
+                setStatusFilter(value as ScheduleQueueStatus | "all")
+              }
+            >
+              <SelectTrigger className="h-10 md:w-48">
+                <SelectValue placeholder="Filter consultation requests" />
+              </SelectTrigger>
+              <SelectContent>
+                {statusOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </FilterBar>
         }
         footer={<PaginationPlaceholder totalItems={filteredRequests.length} />}
