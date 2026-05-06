@@ -14,6 +14,15 @@ from model.calendar import (
     GoogleCalendarConnectRequest,
     GoogleCalendarEvent,
 )
+from model.dashboard import (
+    AdviserDashboardResponse,
+    AdviserDashboardStats,
+    DashboardActivityItem,
+    DashboardActivityType,
+    DashboardSessionItem,
+    StudentDashboardResponse,
+    StudentDashboardStats,
+)
 from model.lookups import InviteStatus, Role, ScheduleStatus, ScheduleType
 from model.notification import (
     Notification,
@@ -52,6 +61,9 @@ __all__ = [
     "AvailabilitySlotPatchRequest",
     "AvailabilitySlotResponse",
     "CalendarSyncSummary",
+    "DashboardActivityItem",
+    "DashboardActivityType",
+    "DashboardSessionItem",
     "DomainModel",
     "GoogleCalendarConnectionStatus",
     "GoogleCalendarConnectRequest",
@@ -82,7 +94,11 @@ __all__ = [
     "ScheduleRescheduleRequest",
     "ScheduleStatus",
     "ScheduleType",
+    "StudentDashboardResponse",
+    "StudentDashboardStats",
     "SupabaseClaims",
     "User",
     "UserResponse",
+    "AdviserDashboardResponse",
+    "AdviserDashboardStats",
 ]

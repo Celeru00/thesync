@@ -19,20 +19,26 @@ export function RecentActivity({ items }: RecentActivityProps) {
         <CardTitle>Recent Activity</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {items.map((item) => (
-          <div key={item.id} className="flex items-start gap-3">
-            <span
-              className={cn(
-                "mt-1.5 size-2 shrink-0 rounded-full",
-                dotColor[item.type],
-              )}
-            />
-            <div className="min-w-0 space-y-0.5">
-              <p className="text-label">{item.title}</p>
-              <p className="text-caption">{item.description}</p>
+        {items.length > 0 ? (
+          items.map((item) => (
+            <div key={item.id} className="flex items-start gap-3">
+              <span
+                className={cn(
+                  "mt-1.5 size-2 shrink-0 rounded-full",
+                  dotColor[item.type],
+                )}
+              />
+              <div className="min-w-0 space-y-0.5">
+                <p className="text-label">{item.title}</p>
+                <p className="text-caption">{item.description}</p>
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        ) : (
+          <p className="text-body-sm text-content-muted">
+            No recent activity yet.
+          </p>
+        )}
       </CardContent>
     </Card>
   );
