@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import Annotated, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from controller.dependencies import CurrentUser
 from model.base import PaginatedResult
@@ -46,7 +46,7 @@ class _UnavailableScheduleService:
     def get_schedule(self, *args, **kwargs) -> Schedule:
         self._raise()
 
-    def cancel_schedule(self, *args, **kwargs) -> None:
+    def cancel_schedule(self, *args, **kwargs) -> Schedule:
         self._raise()
 
 
@@ -181,14 +181,18 @@ def get_schedule(
         _raise_schedule_http_error(exc)
 
 
-@router.delete("/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Cancel schedule")
+@router.delete(
+    "/{schedule_id}",
+    response_model=Schedule,
+    summary="Cancel schedule",
+)
 def cancel_schedule(
     schedule_id: UUID,
     current_user: CurrentUser,
     service: ScheduleServiceDependency,
-) -> Response:
+) -> Schedule:
     try:
-        service.cancel_schedule(current_user, schedule_id)
+        return service.cancel_schedule(current_user, schedule_id)
     except (
         ScheduleForbiddenError,
         ScheduleNotFoundError,
@@ -196,8 +200,6 @@ def cancel_schedule(
         ScheduleServiceUnavailableError,
     ) as exc:
         _raise_schedule_http_error(exc)
-
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.put("/{schedule_id}/approve", response_model=Schedule, summary="Approve schedule")

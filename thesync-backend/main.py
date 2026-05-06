@@ -9,11 +9,13 @@ from controller.notifications import router as notifications_router
 from controller.panelists import router as panelists_router
 from controller.schedules import router as schedules_router
 from repository.config import get_settings
+from usecase.schedule_service import DefaultScheduleService
 from usecase.schedule_status_service import DefaultScheduleStatusService
 
 settings = get_settings()
 
 app = FastAPI(title=settings.app_name)
+app.state.schedule_service = DefaultScheduleService()
 app.state.schedule_status_service = DefaultScheduleStatusService()
 app.add_middleware(
     CORSMiddleware,
