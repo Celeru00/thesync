@@ -4,7 +4,11 @@ from typing import Protocol
 from uuid import UUID
 
 from model.auth import AuthenticatedUser
-from model.notification import Notification, NotificationMarkAllReadResult
+from model.notification import (
+    NotificationListResponse,
+    NotificationMarkAllReadResult,
+    NotificationResponse,
+)
 
 
 class NotificationServiceError(RuntimeError):
@@ -30,13 +34,18 @@ class NotificationServiceUnavailableError(NotificationServiceError):
 class NotificationService(Protocol):
     """Use-case contract for user notification operations."""
 
-    def list_notifications(self, current_user: AuthenticatedUser) -> list[Notification]: ...
+    def list_notifications(
+        self,
+        current_user: AuthenticatedUser,
+        limit: int,
+        offset: int,
+    ) -> NotificationListResponse: ...
 
     def mark_read(
         self,
         current_user: AuthenticatedUser,
         notification_id: UUID,
-    ) -> Notification: ...
+    ) -> NotificationResponse: ...
 
     def mark_all_read(
         self,

@@ -69,6 +69,9 @@ class NotificationRepository:
 
         return _to_notification(row)
 
+    def get_by_id(self, notification_id: UUID | str) -> Notification | None:
+        return self._get_by_id(notification_id)
+
     def create(
         self,
         user_id: UUID,
@@ -162,6 +165,20 @@ class NotificationRepository:
             "user_id", str(user_id)
         ).eq("is_read", False).execute()
         return updated_count
+
+    def count_unread(self, user_id: UUID | str) -> int:
+        response = (
+            self._client.table("notifications")
+            .select("id", count="exact")
+            .eq("user_id", str(user_id))
+            .eq("is_read", False)
+            .execute()
+        )
+        total = getattr(response, "count", None)
+        if isinstance(total, int) and total >= 0:
+            return total
+
+        return len(_rows(response.data))
 
 
 def get_notification_repository() -> NotificationRepository:

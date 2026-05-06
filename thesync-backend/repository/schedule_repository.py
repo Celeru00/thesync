@@ -199,6 +199,20 @@ class ScheduleRepository:
         except (KeyError, TypeError, ValueError):
             return None
 
+    def get_type_name_by_id(self, type_id: int) -> str | None:
+        response = self._client.table("schedule_types").select("name").eq("id", type_id).execute()
+        row = _first_row(response.data)
+
+        if row is None:
+            return None
+
+        type_name = row.get("name")
+        if not isinstance(type_name, str):
+            return None
+
+        normalized_type_name = type_name.strip().lower()
+        return normalized_type_name or None
+
     def list_by_student(
         self,
         student_id: UUID | str,

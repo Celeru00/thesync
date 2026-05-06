@@ -3,10 +3,14 @@ from __future__ import annotations
 from typing import Annotated, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from controller.dependencies import CurrentUser
-from model.notification import Notification, NotificationMarkAllReadResult
+from model.notification import (
+    NotificationListResponse,
+    NotificationMarkAllReadResult,
+    NotificationResponse,
+)
 from usecase.notifications import (
     NotificationConflictError,
     NotificationForbiddenError,
@@ -22,10 +26,10 @@ class _UnavailableNotificationService:
     def _raise(self) -> None:
         raise NotificationServiceUnavailableError("Notification service is not configured.")
 
-    def list_notifications(self, *args, **kwargs) -> list[Notification]:
+    def list_notifications(self, *args, **kwargs) -> NotificationListResponse:
         self._raise()
 
-    def mark_read(self, *args, **kwargs) -> Notification:
+    def mark_read(self, *args, **kwargs) -> NotificationResponse:
         self._raise()
 
     def mark_all_read(self, *args, **kwargs) -> NotificationMarkAllReadResult:
@@ -62,23 +66,25 @@ def _raise_notification_http_error(exc: Exception) -> None:
         ) from exc
 
 
-@router.get("", response_model=list[Notification])
+@router.get("", response_model=NotificationListResponse)
 def list_notifications(
     current_user: CurrentUser,
     service: NotificationServiceDependency,
-) -> list[Notification]:
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> NotificationListResponse:
     try:
-        return service.list_notifications(current_user)
+        return service.list_notifications(current_user, limit, offset)
     except (NotificationForbiddenError, NotificationServiceUnavailableError) as exc:
         _raise_notification_http_error(exc)
 
 
-@router.patch("/{notification_id}/read", response_model=Notification)
+@router.patch("/{notification_id}/read", response_model=NotificationResponse)
 def mark_notification_read(
     notification_id: UUID,
     current_user: CurrentUser,
     service: NotificationServiceDependency,
-) -> Notification:
+) -> NotificationResponse:
     try:
         return service.mark_read(current_user, notification_id)
     except (

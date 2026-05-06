@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from controller.dependencies import CurrentUser
 from model.panelist import (
-    PanelistAssignment,
     PanelistAssignmentCreateRequest,
+    PanelistAssignmentResponse,
     PanelistInviteResponseRequest,
 )
 from usecase.panelists import (
@@ -27,10 +27,10 @@ class _UnavailablePanelistService:
     def _raise(self) -> None:
         raise PanelistServiceUnavailableError("Panelist service is not configured.")
 
-    def add_panelist(self, *args, **kwargs) -> PanelistAssignment:
+    def add_panelist(self, *args, **kwargs) -> PanelistAssignmentResponse:
         self._raise()
 
-    def respond_to_invite(self, *args, **kwargs) -> PanelistAssignment:
+    def respond_to_invite(self, *args, **kwargs) -> PanelistAssignmentResponse:
         self._raise()
 
     def remove_panelist(self, *args, **kwargs) -> None:
@@ -69,7 +69,7 @@ def _raise_panelist_http_error(exc: Exception) -> None:
 
 @router.post(
     "/schedules/{schedule_id}/panelists",
-    response_model=PanelistAssignment,
+    response_model=PanelistAssignmentResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def add_schedule_panelist(
@@ -77,7 +77,7 @@ def add_schedule_panelist(
     payload: PanelistAssignmentCreateRequest,
     current_user: CurrentUser,
     service: PanelistServiceDependency,
-) -> PanelistAssignment:
+) -> PanelistAssignmentResponse:
     try:
         return service.add_panelist(current_user, schedule_id, payload)
     except (
@@ -92,7 +92,7 @@ def add_schedule_panelist(
 
 @router.patch(
     "/schedules/{schedule_id}/panelists/{panelist_id}/respond",
-    response_model=PanelistAssignment,
+    response_model=PanelistAssignmentResponse,
 )
 def respond_to_panelist_invite(
     schedule_id: UUID,
@@ -100,7 +100,7 @@ def respond_to_panelist_invite(
     payload: PanelistInviteResponseRequest,
     current_user: CurrentUser,
     service: PanelistServiceDependency,
-) -> PanelistAssignment:
+) -> PanelistAssignmentResponse:
     try:
         return service.respond_to_invite(current_user, schedule_id, panelist_id, payload)
     except (

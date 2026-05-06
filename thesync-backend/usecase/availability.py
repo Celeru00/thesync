@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date, datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -50,6 +51,7 @@ class AvailabilityService(Protocol):
         self,
         current_user: AuthenticatedUser,
         adviser_id: UUID,
+        day: date | datetime | None = None,
     ) -> list[AvailabilitySlot]: ...
 
     def toggle_blocked(

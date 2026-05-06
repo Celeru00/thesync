@@ -97,6 +97,9 @@ class AvailabilityRepository:
 
         return _to_availability_slot(row)
 
+    def get_by_id(self, slot_id: UUID | str) -> AvailabilitySlot | None:
+        return self._get_by_id(slot_id)
+
     def _get_schedule_status_id(self, status_name: str) -> int | None:
         response = (
             self._client.table("schedule_statuses")
