@@ -8,6 +8,7 @@ from starlette.types import ASGIApp
 from repository.auth import (
     AuthConfigurationError,
     AuthenticationError,
+    AuthServiceUnavailableError,
     extract_bearer_token,
     resolve_authenticated_session,
 )
@@ -54,6 +55,17 @@ class SupabaseAuthMiddleware(BaseHTTPMiddleware):
             )
             return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"detail": str(exc)},
+            )
+        except AuthServiceUnavailableError as exc:
+            _debug_log(
+                "middleware_dependency_error",
+                path=request.url.path,
+                method=request.method,
+                reason=str(exc),
+            )
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 content={"detail": str(exc)},
             )
 

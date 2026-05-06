@@ -10,6 +10,7 @@ from model.auth import (
     SupabaseClaims,
 )
 from repository.auth import (
+    AuthServiceUnavailableError,
     ProvisioningError,
     complete_application_user_registration,
     ensure_application_user,
@@ -66,8 +67,21 @@ def initialize_authenticated_session(
                 "registration-sync-failed",
                 str(exc),
             ) from exc
+        except AuthServiceUnavailableError as exc:
+            raise AuthFlowError(
+                "auth-backend-unavailable",
+                str(exc),
+                status_code=503,
+            ) from exc
     else:
-        user_state = get_application_user_state(current_claims.sub)
+        try:
+            user_state = get_application_user_state(current_claims.sub)
+        except AuthServiceUnavailableError as exc:
+            raise AuthFlowError(
+                "auth-backend-unavailable",
+                str(exc),
+                status_code=503,
+            ) from exc
 
     if user_state is None:
         raise AuthFlowError(
@@ -131,4 +145,10 @@ def complete_registration(
             "registration-sync-failed",
             str(exc),
             status_code=409,
+        ) from exc
+    except AuthServiceUnavailableError as exc:
+        raise AuthFlowError(
+            "auth-backend-unavailable",
+            str(exc),
+            status_code=503,
         ) from exc

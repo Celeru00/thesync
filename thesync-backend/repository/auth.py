@@ -8,7 +8,7 @@ from jwt import PyJWKClient
 from jwt.exceptions import InvalidTokenError, PyJWKClientError
 from pydantic import ValidationError
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import joinedload
 
 from model.auth import (
@@ -46,6 +46,10 @@ class AuthenticationError(RuntimeError):
 
 class ProvisioningError(RuntimeError):
     """Raised when an application user cannot be provisioned or completed."""
+
+
+class AuthServiceUnavailableError(RuntimeError):
+    """Raised when the auth layer cannot reach its persistence dependencies."""
 
 
 def extract_bearer_token(authorization: str | None) -> str | None:
@@ -186,13 +190,24 @@ def _resolve_avatar_url(claims: SupabaseClaims) -> str | None:
     return _get_metadata_value(claims, "avatar_url", "picture")
 
 
-def _load_user_record(user_id: UUID, *, with_role: bool = False) -> UserRecord | None:
-    with SessionLocal() as session:
-        statement = select(UserRecord).where(UserRecord.id == user_id)
-        if with_role:
-            statement = statement.options(joinedload(UserRecord.role))
+def _raise_auth_storage_unavailable(exc: Exception) -> None:
+    raise AuthServiceUnavailableError(
+        "Authentication services are temporarily unavailable. "
+        "Check database connectivity and try again."
+    ) from exc
 
-        return session.execute(statement).unique().scalar_one_or_none()
+
+def _load_user_record(user_id: UUID, *, with_role: bool = False) -> UserRecord | None:
+    try:
+        with SessionLocal() as session:
+            statement = select(UserRecord).where(UserRecord.id == user_id)
+            if with_role:
+                statement = statement.options(joinedload(UserRecord.role))
+
+            return session.execute(statement).unique().scalar_one_or_none()
+    except SQLAlchemyError as exc:
+        _debug_log("user_record_load_failed", user_id=str(user_id), reason=repr(exc))
+        _raise_auth_storage_unavailable(exc)
 
 
 def _to_application_user_state(user_record: UserRecord) -> ApplicationUserState:
@@ -310,6 +325,9 @@ def ensure_application_user(claims: SupabaseClaims) -> ApplicationUserState:
             ) from exc
 
         return user_state
+    except SQLAlchemyError as exc:
+        _debug_log("ensure_application_user_failed", user_id=str(claims.sub), reason=repr(exc))
+        _raise_auth_storage_unavailable(exc)
 
     user_state = get_application_user_state(claims.sub)
 
@@ -342,6 +360,14 @@ def complete_application_user_registration(
         raise ProvisioningError(
             "We couldn't create your account right now. Please try again."
         ) from exc
+    except SQLAlchemyError as exc:
+        _debug_log(
+            "complete_registration_failed",
+            user_id=str(claims.sub),
+            role=role,
+            reason=repr(exc),
+        )
+        _raise_auth_storage_unavailable(exc)
 
     user_record = _load_user_record(claims.sub, with_role=True)
 
