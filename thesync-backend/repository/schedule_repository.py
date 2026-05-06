@@ -12,14 +12,6 @@ SCHEDULE_SELECT = (
     "id, student_id, adviser_id, type_id, status_id, topic, requested_at, "
     "scheduled_at, google_calendar_event_id, meet_link, created_at"
 )
-SCHEDULE_LIST_SELECT = (
-    "id, student_id, adviser_id, type_id, status_id, topic, requested_at, "
-    "scheduled_at, google_calendar_event_id, meet_link, created_at, "
-    "student:users!fk_schedules_student_id_users(full_name), "
-    "adviser:users!fk_schedules_adviser_id_users(full_name), "
-    "schedule_type:schedule_types!fk_schedules_type_id_schedule_types(name), "
-    "schedule_status:schedule_statuses!fk_schedules_status_id_schedule_statuses(name)"
-)
 
 
 class ScheduleRepositoryNotFoundError(LookupError):
@@ -86,51 +78,6 @@ def _to_schedule(row: dict[str, Any]) -> Schedule:
     )
 
 
-def _extract_nested_text(
-    row: dict[str, Any],
-    relation_key: str,
-    field_name: str,
-) -> str | None:
-    related = row.get(relation_key)
-    if isinstance(related, dict):
-        value = related.get(field_name)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-        return None
-
-    if isinstance(related, list):
-        for item in related:
-            if not isinstance(item, dict):
-                continue
-            value = item.get(field_name)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-
-    return None
-
-
-def _to_schedule_list_item(row: dict[str, Any]) -> ScheduleListItem:
-    return ScheduleListItem.model_validate(
-        {
-            "id": row.get("id"),
-            "student_id": row.get("student_id"),
-            "adviser_id": row.get("adviser_id"),
-            "type_id": row.get("type_id"),
-            "status_id": row.get("status_id"),
-            "topic": row.get("topic"),
-            "requested_at": row.get("requested_at"),
-            "scheduled_at": row.get("scheduled_at"),
-            "google_calendar_event_id": row.get("google_calendar_event_id"),
-            "meet_link": row.get("meet_link"),
-            "created_at": row.get("created_at"),
-            "student_full_name": _extract_nested_text(row, "student", "full_name"),
-            "adviser_full_name": _extract_nested_text(row, "adviser", "full_name"),
-            "type_name": _extract_nested_text(row, "schedule_type", "name"),
-            "status_name": _extract_nested_text(row, "schedule_status", "name"),
-        }
-    )
-
-
 class ScheduleRepository:
     """Supabase-backed repository for raw schedule table reads and writes."""
 
@@ -141,7 +88,7 @@ class ScheduleRepository:
         self,
         *,
         filters: ScheduleListFilters,
-        select_clause: str = SCHEDULE_LIST_SELECT,
+        select_clause: str = SCHEDULE_SELECT,
     ) -> Any:
         query = self._client.table("schedules").select(select_clause, count="exact")
 
@@ -165,6 +112,97 @@ class ScheduleRepository:
 
         return query.order("scheduled_at").order("requested_at").range(start, end)
 
+    def _lookup_text_map(
+        self,
+        *,
+        table_name: str,
+        ids: set[str],
+        text_field: str,
+    ) -> dict[str, str]:
+        if not ids:
+            return {}
+
+        response = (
+            self._client.table(table_name)
+            .select(f"id,{text_field}")
+            .in_("id", sorted(ids))
+            .execute()
+        )
+
+        values: dict[str, str] = {}
+        for row in _rows(response.data):
+            raw_id = row.get("id")
+            raw_text = row.get(text_field)
+            if raw_id is None or not isinstance(raw_text, str):
+                continue
+            normalized_text = raw_text.strip()
+            if normalized_text:
+                values[str(raw_id)] = normalized_text
+
+        return values
+
+    def _to_schedule_list_items(self, rows: list[dict[str, Any]]) -> list[ScheduleListItem]:
+        student_ids = {
+            str(row.get("student_id")) for row in rows if row.get("student_id") is not None
+        }
+        adviser_ids = {
+            str(row.get("adviser_id")) for row in rows if row.get("adviser_id") is not None
+        }
+        type_ids = {str(row.get("type_id")) for row in rows if row.get("type_id") is not None}
+        status_ids = {str(row.get("status_id")) for row in rows if row.get("status_id") is not None}
+
+        student_names = self._lookup_text_map(
+            table_name="users",
+            ids=student_ids,
+            text_field="full_name",
+        )
+        adviser_names = self._lookup_text_map(
+            table_name="users",
+            ids=adviser_ids,
+            text_field="full_name",
+        )
+        type_names = self._lookup_text_map(
+            table_name="schedule_types",
+            ids=type_ids,
+            text_field="name",
+        )
+        status_names = self._lookup_text_map(
+            table_name="schedule_statuses",
+            ids=status_ids,
+            text_field="name",
+        )
+
+        items: list[ScheduleListItem] = []
+        for row in rows:
+            student_id = str(row.get("student_id"))
+            adviser_id = str(row.get("adviser_id"))
+            type_id = str(row.get("type_id"))
+            status_id = str(row.get("status_id"))
+
+            items.append(
+                ScheduleListItem.model_validate(
+                    {
+                        "id": row.get("id"),
+                        "student_id": row.get("student_id"),
+                        "adviser_id": row.get("adviser_id"),
+                        "type_id": row.get("type_id"),
+                        "status_id": row.get("status_id"),
+                        "topic": row.get("topic"),
+                        "requested_at": row.get("requested_at"),
+                        "scheduled_at": row.get("scheduled_at"),
+                        "google_calendar_event_id": row.get("google_calendar_event_id"),
+                        "meet_link": row.get("meet_link"),
+                        "created_at": row.get("created_at"),
+                        "student_full_name": student_names.get(student_id, "Unknown student"),
+                        "adviser_full_name": adviser_names.get(adviser_id, "Unknown adviser"),
+                        "type_name": type_names.get(type_id, "Unknown type"),
+                        "status_name": status_names.get(status_id, "Unknown status"),
+                    }
+                )
+            )
+
+        return items
+
     def _list_with_filters(
         self,
         *,
@@ -182,7 +220,7 @@ class ScheduleRepository:
         total = getattr(response, "count", None)
 
         return PaginatedResult[ScheduleListItem](
-            items=[_to_schedule_list_item(row) for row in rows],
+            items=self._to_schedule_list_items(rows),
             total=total if isinstance(total, int) and total >= 0 else len(rows),
             page=filters.page,
             page_size=filters.limit,
@@ -341,7 +379,7 @@ class ScheduleRepository:
         total = getattr(response, "count", None)
 
         return PaginatedResult[ScheduleListItem](
-            items=[_to_schedule_list_item(row) for row in rows],
+            items=self._to_schedule_list_items(rows),
             total=total if isinstance(total, int) and total >= 0 else len(rows),
             page=filters.page,
             page_size=filters.limit,

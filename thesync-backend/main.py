@@ -8,6 +8,7 @@ from controller.middleware import SupabaseAuthMiddleware
 from controller.notifications import router as notifications_router
 from controller.panelists import router as panelists_router
 from controller.schedules import router as schedules_router
+from controller.users import router as users_router
 from repository.config import get_settings
 from usecase.availability_service import DefaultAvailabilityService
 from usecase.notification_service import DefaultNotificationService
@@ -37,7 +38,8 @@ app.include_router(calendar_router, prefix="/api")
 app.include_router(availability_router, prefix="/api")
 app.include_router(panelists_router, prefix="/api")
 app.include_router(notifications_router, prefix="/api")
-app.include_router(schedules_router, prefix="/api/v1")
+app.include_router(schedules_router, prefix="/api")
+app.include_router(users_router, prefix="/api")
 
 
 @app.get("/")

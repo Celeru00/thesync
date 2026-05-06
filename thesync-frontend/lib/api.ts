@@ -107,6 +107,16 @@ export type MarkAllNotificationsReadResult = {
   updated_count: number;
 };
 
+export type AdviserDirectoryUser = {
+  id: UUID;
+  role_id: number;
+  role_name: string | null;
+  full_name: string;
+  email: string;
+  avatar_url: string | null;
+  created_at: ISODateTimeString;
+};
+
 function toSearchParams(
   params: Record<string, string | number | undefined>,
 ): URLSearchParams {
@@ -199,10 +209,14 @@ export async function rejectSchedule(
 export async function rescheduleSchedule(
   id: string,
   new_scheduled_at: string,
+  remarks?: string,
 ): Promise<Schedule> {
   const payload: RescheduleScheduleRequest = {
     scheduled_at: new_scheduled_at,
   };
+  if (remarks !== undefined) {
+    payload.remarks = remarks;
+  }
   const response = await axiosInstance.put<Schedule>(
     `/api/schedules/${id}/reschedule`,
     payload,
@@ -278,6 +292,13 @@ export async function markNotificationRead(id: string): Promise<Notification> {
 export async function markAllNotificationsRead(): Promise<MarkAllNotificationsReadResult> {
   const response = await axiosInstance.patch<MarkAllNotificationsReadResult>(
     "/api/notifications/read-all",
+  );
+  return response.data;
+}
+
+export async function listAdvisers(): Promise<AdviserDirectoryUser[]> {
+  const response = await axiosInstance.get<AdviserDirectoryUser[]>(
+    "/api/users/advisers",
   );
   return response.data;
 }

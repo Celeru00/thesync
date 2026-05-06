@@ -15,7 +15,7 @@ type LoginPageProps = {
 
 function getErrorMessage(error?: string) {
   if (error === "google-auth-failed") {
-    return "We couldn't sign you in. Use your @up.edu.ph Google account and try again.";
+    return "We couldn't sign you in. Use your Google account and try again.";
   }
 
   if (error === "missing-code") {

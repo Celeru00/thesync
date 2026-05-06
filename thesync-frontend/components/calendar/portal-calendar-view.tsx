@@ -37,10 +37,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useAdvisers } from "@/hooks/useAdvisers";
+import { useCreateSchedule } from "@/hooks/useSchedules";
 import {
-  studentAdvisers,
-  type ConsultationRequestType,
-} from "@/lib/mock/student-consultations";
+  buildScheduledAtIso,
+  parseConsultationRequestError,
+  scheduleTypeIdByValue,
+  type ConsultationRequestFieldName,
+} from "@/lib/consultation-request";
+import { type ConsultationRequestType } from "@/lib/mock/student-consultations";
 import { cn } from "@/lib/utils";
 
 type CalendarView = "month" | "week";
@@ -1168,12 +1173,77 @@ function CreateRequestModal({
   const [adviserId, setAdviserId] = useState("");
   const [topic, setTopic] = useState("");
   const [description, setDescription] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<
+    Partial<Record<ConsultationRequestFieldName, string>>
+  >({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const { data: advisers = [], isLoading: isLoadingAdvisers } = useAdvisers();
+  const createScheduleMutation = useCreateSchedule();
 
   const selectedAdviser = useMemo(
-    () => studentAdvisers.find((adviser) => adviser.id === adviserId) ?? null,
-    [adviserId],
+    () => advisers.find((adviser) => adviser.id === adviserId) ?? null,
+    [adviserId, advisers],
   );
   const canSubmit = Boolean(requestType && adviserId && topic.trim());
+
+  async function handleSubmit() {
+    const nextFieldErrors: Partial<
+      Record<ConsultationRequestFieldName, string>
+    > = {};
+
+    if (!requestType) {
+      nextFieldErrors.scheduleType = "Please select a consultation type.";
+    }
+
+    if (!adviserId) {
+      nextFieldErrors.selectedAdviserId = "Please choose an adviser.";
+    }
+
+    if (!topic.trim()) {
+      nextFieldErrors.topic = "Please enter a topic.";
+    }
+
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setFieldErrors(nextFieldErrors);
+      setSubmitError(null);
+      return;
+    }
+
+    if (!requestType) {
+      return;
+    }
+
+    setFieldErrors({});
+    setSubmitError(null);
+
+    try {
+      await createScheduleMutation.mutateAsync({
+        adviser_id: adviserId,
+        type_id: scheduleTypeIdByValue[requestType],
+        topic: topic.trim(),
+        scheduled_at: buildScheduledAtIso(
+          toDateInputValue(draft.date),
+          toTimeInputValue(draft.date),
+        ),
+      });
+
+      setRequestType(undefined);
+      setAdviserId("");
+      setTopic("");
+      setDescription("");
+      onClose();
+    } catch (error) {
+      const parsedError = parseConsultationRequestError(error);
+
+      if (parsedError.submitError) {
+        setSubmitError(parsedError.submitError);
+      }
+
+      if (parsedError.fieldErrors) {
+        setFieldErrors(parsedError.fieldErrors);
+      }
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 px-4 py-8 backdrop-blur-[2px]">
@@ -1216,9 +1286,14 @@ function CreateRequestModal({
           <ModalField icon={FileText} label="Consultation Type">
             <Select
               value={requestType ?? undefined}
-              onValueChange={(value) =>
-                setRequestType(value as ConsultationRequestType)
-              }
+              onValueChange={(value) => {
+                setRequestType(value as ConsultationRequestType);
+                setFieldErrors((current) => ({
+                  ...current,
+                  scheduleType: undefined,
+                }));
+                setSubmitError(null);
+              }}
             >
               <SelectTrigger className="h-11 rounded-[0.95rem]">
                 <SelectValue placeholder="Select consultation type" />
@@ -1228,33 +1303,56 @@ function CreateRequestModal({
                 <SelectItem value="defense">Defense</SelectItem>
               </SelectContent>
             </Select>
+            <InlineFieldError message={fieldErrors.scheduleType} />
           </ModalField>
 
           <ModalField icon={UserRound} label="Select Adviser">
             <Select
               value={adviserId || undefined}
-              onValueChange={(value) => setAdviserId(value)}
+              onValueChange={(value) => {
+                setAdviserId(value);
+                setFieldErrors((current) => ({
+                  ...current,
+                  selectedAdviserId: undefined,
+                }));
+                setSubmitError(null);
+              }}
             >
               <SelectTrigger className="h-11 rounded-[0.95rem]">
-                <SelectValue placeholder="Choose your adviser" />
+                <SelectValue
+                  placeholder={
+                    isLoadingAdvisers
+                      ? "Loading advisers..."
+                      : "Choose your adviser"
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
-                {studentAdvisers.map((adviser) => (
+                {advisers.map((adviser) => (
                   <SelectItem key={adviser.id} value={adviser.id}>
-                    {adviser.name}
+                    {adviser.name} ({adviser.departmentCode})
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            <InlineFieldError message={fieldErrors.selectedAdviserId} />
           </ModalField>
 
           <ModalField label="Topic / Title">
             <Input
               value={topic}
-              onChange={(event) => setTopic(event.target.value)}
+              onChange={(event) => {
+                setTopic(event.target.value);
+                setFieldErrors((current) => ({
+                  ...current,
+                  topic: undefined,
+                }));
+                setSubmitError(null);
+              }}
               placeholder="e.g., Chapter 1 Review, Methodology Discussion"
               className="h-11 rounded-[0.95rem]"
             />
+            <InlineFieldError message={fieldErrors.topic} />
           </ModalField>
 
           <ModalField label="Description / Agenda">
@@ -1267,6 +1365,12 @@ function CreateRequestModal({
               className="min-h-[7.5rem] rounded-[0.95rem]"
             />
           </ModalField>
+
+          {submitError ? (
+            <div className="rounded-[1rem] border border-destructive/25 bg-destructive/10 px-4 py-3 text-body-sm text-destructive">
+              {submitError}
+            </div>
+          ) : null}
 
           {selectedAdviser ? (
             <div className="rounded-[1rem] border border-surface bg-surface-muted-soft px-4 py-3 text-body-sm text-content-muted">
@@ -1291,9 +1395,12 @@ function CreateRequestModal({
             <Button
               type="button"
               className="h-11 flex-1 rounded-[0.95rem]"
-              disabled={!canSubmit}
+              disabled={!canSubmit || createScheduleMutation.isPending}
+              onClick={handleSubmit}
             >
-              Create Request
+              {createScheduleMutation.isPending
+                ? "Submitting..."
+                : "Create Request"}
             </Button>
           </div>
 
@@ -1352,6 +1459,22 @@ function ModalField({
       {children}
     </div>
   );
+}
+
+function InlineFieldError({ message }: { message?: string }) {
+  if (!message) {
+    return null;
+  }
+
+  return <p className="text-body-sm text-destructive">{message}</p>;
+}
+
+function toDateInputValue(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function toTimeInputValue(date: Date) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 function MonthDetailsRail({

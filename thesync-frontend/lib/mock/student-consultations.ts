@@ -3,7 +3,8 @@ export type ConsultationRequestStatus =
   | "approved"
   | "pending"
   | "completed"
-  | "rejected";
+  | "rejected"
+  | "cancelled";
 export type AdviserAvailability = "High" | "Medium" | "Limited";
 export type TimePeriod = "morning" | "afternoon" | "all-day";
 
