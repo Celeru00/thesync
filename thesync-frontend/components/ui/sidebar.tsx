@@ -15,6 +15,7 @@ export type SidebarUser = {
   name: string;
   email: string;
   initials?: string;
+  avatarUrl?: string | null;
 };
 
 type SidebarProps = Omit<React.ComponentProps<"aside">, "title"> & {
@@ -58,6 +59,27 @@ function getInitials(name: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
+}
+
+function SidebarAvatar({ user }: { user: SidebarUser }) {
+  const initials = user.initials ?? getInitials(user.name);
+
+  if (!user.avatarUrl) {
+    return (
+      <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground">
+        {initials}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={user.avatarUrl}
+      alt={`${user.name} profile`}
+      className="size-10 shrink-0 rounded-full object-cover"
+      referrerPolicy="no-referrer"
+    />
+  );
 }
 
 function Sidebar({
@@ -139,9 +161,7 @@ function Sidebar({
             data-slot="sidebar-user"
             className="flex items-center gap-3 rounded-2xl px-2 py-3"
           >
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground">
-              {user.initials ?? getInitials(user.name)}
-            </div>
+            <SidebarAvatar user={user} />
             <div className="min-w-0">
               <div className="truncate text-label font-medium text-sidebar-foreground">
                 {user.name}

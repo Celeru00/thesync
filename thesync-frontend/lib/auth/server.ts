@@ -1,9 +1,14 @@
 import "server-only";
 
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 
-import { fetchCurrentAppUser, type AppSessionUser } from "@/lib/auth/backend";
+import {
+  BackendAuthError,
+  fetchCurrentAppUser,
+  type AppSessionUser,
+} from "@/lib/auth/backend";
 import { getDashboardPathForRole, type AppRole } from "@/lib/auth/profile";
 import { isRefreshTokenNotFoundError } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
@@ -14,54 +19,56 @@ type ServerAuthState = {
   appUser: AppSessionUser | null;
 };
 
-async function resolveSupabaseAuthState(): Promise<{
-  authUser: User | null;
-  session: Session | null;
-}> {
-  const supabase = await createClient();
-  let user: User | null = null;
-  let session: Session | null = null;
+const resolveSupabaseAuthState = cache(
+  async (): Promise<{
+    authUser: User | null;
+    session: Session | null;
+  }> => {
+    const supabase = await createClient();
+    let user: User | null = null;
+    let session: Session | null = null;
 
-  try {
-    const [
-      {
-        data: { user: resolvedUser },
-      },
-      {
-        data: { session: resolvedSession },
-      },
-    ] = await Promise.all([
-      supabase.auth.getUser(),
-      supabase.auth.getSession(),
-    ]);
+    try {
+      const [
+        {
+          data: { user: resolvedUser },
+        },
+        {
+          data: { session: resolvedSession },
+        },
+      ] = await Promise.all([
+        supabase.auth.getUser(),
+        supabase.auth.getSession(),
+      ]);
 
-    user = resolvedUser;
-    session = resolvedSession;
-  } catch (error) {
-    if (isRefreshTokenNotFoundError(error)) {
+      user = resolvedUser;
+      session = resolvedSession;
+    } catch (error) {
+      if (isRefreshTokenNotFoundError(error)) {
+        return {
+          authUser: null,
+          session: null,
+        };
+      }
+
+      throw error;
+    }
+
+    if (!user || !session?.access_token) {
       return {
-        authUser: null,
-        session: null,
+        authUser: user ?? null,
+        session: session ?? null,
       };
     }
 
-    throw error;
-  }
-
-  if (!user || !session?.access_token) {
     return {
-      authUser: user ?? null,
-      session: session ?? null,
+      authUser: user,
+      session,
     };
-  }
+  },
+);
 
-  return {
-    authUser: user,
-    session,
-  };
-}
-
-export async function getServerAuthState(): Promise<ServerAuthState> {
+export const getServerAuthState = cache(async (): Promise<ServerAuthState> => {
   const { authUser, session } = await resolveSupabaseAuthState();
 
   if (!authUser || !session?.access_token) {
@@ -77,34 +84,36 @@ export async function getServerAuthState(): Promise<ServerAuthState> {
     session,
     appUser: await fetchCurrentAppUser(session.access_token),
   };
-}
+});
 
-export async function getPublicServerAuthState(): Promise<ServerAuthState> {
-  const { authUser, session } = await resolveSupabaseAuthState();
+export const getPublicServerAuthState = cache(
+  async (): Promise<ServerAuthState> => {
+    const { authUser, session } = await resolveSupabaseAuthState();
 
-  if (!authUser || !session?.access_token) {
-    return {
-      authUser,
-      session,
-      appUser: null,
-    };
-  }
+    if (!authUser || !session?.access_token) {
+      return {
+        authUser,
+        session,
+        appUser: null,
+      };
+    }
 
-  try {
-    return {
-      authUser,
-      session,
-      appUser: await fetchCurrentAppUser(session.access_token),
-    };
-  } catch (error) {
-    console.error("[frontend-auth] public_auth_state_fallback", error);
-    return {
-      authUser,
-      session,
-      appUser: null,
-    };
-  }
-}
+    try {
+      return await getServerAuthState();
+    } catch (error) {
+      if (!(error instanceof BackendAuthError)) {
+        throw error;
+      }
+
+      console.error("[frontend-auth] public_auth_state_fallback", error);
+      return {
+        authUser,
+        session,
+        appUser: null,
+      };
+    }
+  },
+);
 
 export async function getRequiredAppUser() {
   const { appUser, authUser } = await getServerAuthState();
