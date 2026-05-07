@@ -15,7 +15,10 @@ type ServerAuthState = {
   appUser: AppSessionUser | null;
 };
 
-export const getServerAuthState = cache(async (): Promise<ServerAuthState> => {
+async function resolveSupabaseAuthState(): Promise<{
+  authUser: User | null;
+  session: Session | null;
+}> {
   const supabase = await createClient();
   let user: User | null = null;
   let session: Session | null = null;
@@ -40,7 +43,6 @@ export const getServerAuthState = cache(async (): Promise<ServerAuthState> => {
       return {
         authUser: null,
         session: null,
-        appUser: null,
       };
     }
 
@@ -51,16 +53,61 @@ export const getServerAuthState = cache(async (): Promise<ServerAuthState> => {
     return {
       authUser: user ?? null,
       session: session ?? null,
-      appUser: null,
     };
   }
 
   return {
     authUser: user,
     session,
+  };
+}
+
+export const getServerAuthState = cache(async (): Promise<ServerAuthState> => {
+  const { authUser, session } = await resolveSupabaseAuthState();
+
+  if (!authUser || !session?.access_token) {
+    return {
+      authUser,
+      session,
+      appUser: null,
+    };
+  }
+
+  return {
+    authUser,
+    session,
     appUser: await fetchCurrentAppUser(session.access_token),
   };
 });
+
+export const getPublicServerAuthState = cache(
+  async (): Promise<ServerAuthState> => {
+    const { authUser, session } = await resolveSupabaseAuthState();
+
+    if (!authUser || !session?.access_token) {
+      return {
+        authUser,
+        session,
+        appUser: null,
+      };
+    }
+
+    try {
+      return {
+        authUser,
+        session,
+        appUser: await fetchCurrentAppUser(session.access_token),
+      };
+    } catch (error) {
+      console.error("[frontend-auth] public_auth_state_fallback", error);
+      return {
+        authUser,
+        session,
+        appUser: null,
+      };
+    }
+  },
+);
 
 export async function getRequiredAppUser() {
   const { appUser, authUser } = await getServerAuthState();
