@@ -9,6 +9,7 @@ from repository.auth import (
     AuthConfigurationError,
     AuthenticationError,
     AuthServiceUnavailableError,
+    DomainRestrictedAuthenticationError,
     extract_bearer_token,
     resolve_authenticated_session,
 )
@@ -42,6 +43,16 @@ class SupabaseAuthMiddleware(BaseHTTPMiddleware):
                 method=request.method,
                 reason=str(exc),
             )
+            if isinstance(exc, DomainRestrictedAuthenticationError):
+                return JSONResponse(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    content={
+                        "detail": {
+                            "error_code": "domain-restricted",
+                            "message": str(exc),
+                        }
+                    },
+                )
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={"detail": str(exc)},

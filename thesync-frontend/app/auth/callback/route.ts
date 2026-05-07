@@ -7,7 +7,6 @@ import { isAppRole, isSignupRole } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
 const DEFAULT_REDIRECT_PATH = "/student";
-const ALLOWED_EMAIL_DOMAIN = "@up.edu.ph";
 
 function getSafeNextPath(nextPath: string | null) {
   if (!nextPath || !nextPath.startsWith("/") || nextPath.startsWith("//")) {
@@ -44,8 +43,14 @@ function getCalendarReturnUrl(
   return target;
 }
 
-function isAllowedUpEmail(email: string | null | undefined) {
-  return Boolean(email?.trim().toLowerCase().endsWith(ALLOWED_EMAIL_DOMAIN));
+function isDomainRestrictionError(description: string | null) {
+  const normalized = description?.trim().toLowerCase();
+
+  return Boolean(
+    normalized &&
+    (normalized.includes("@up.edu.ph") ||
+      normalized.includes("only google accounts are allowed")),
+  );
 }
 
 export async function GET(request: Request) {
@@ -89,7 +94,12 @@ export async function GET(request: Request) {
       }
 
       return NextResponse.redirect(
-        getLoginUrl(appOrigin, "google-auth-failed"),
+        getLoginUrl(
+          appOrigin,
+          isDomainRestrictionError(authErrorDescription)
+            ? "domain-restricted"
+            : "google-auth-failed",
+        ),
       );
     }
 
@@ -141,14 +151,6 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.redirect(getLoginUrl(appOrigin, "google-auth-failed"));
-  }
-
-  if (!isCalendarConnectIntent && !isAllowedUpEmail(user.email)) {
-    console.log("[frontend-auth] oauth_callback_domain_rejected", {
-      email: user.email,
-    });
-    await supabase.auth.signOut();
-    return NextResponse.redirect(getLoginUrl(appOrigin, "domain-restricted"));
   }
 
   if (isCalendarConnectIntent) {
@@ -217,6 +219,13 @@ export async function GET(request: Request) {
         status: error.status,
         message: error.message,
       });
+
+      if (error.code === "domain-restricted") {
+        await supabase.auth.signOut();
+        return NextResponse.redirect(
+          getLoginUrl(appOrigin, "domain-restricted"),
+        );
+      }
 
       if (error.code === "admin-not-provisioned") {
         await supabase.auth.signOut();

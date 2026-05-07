@@ -57,6 +57,10 @@ class AuthenticationError(RuntimeError):
     """Raised when an incoming access token cannot be trusted."""
 
 
+class DomainRestrictedAuthenticationError(AuthenticationError):
+    """Raised when an authenticated account is outside the allowed email domain."""
+
+
 class ProvisioningError(RuntimeError):
     """Raised when an application user cannot be provisioned or completed."""
 
@@ -187,7 +191,7 @@ def _has_allowed_email_domain(email: str | None) -> bool:
 
 def _assert_allowed_email_domain(email: str | None) -> None:
     if not _has_allowed_email_domain(email):
-        raise AuthenticationError("Only @up.edu.ph Google accounts are allowed.")
+        raise DomainRestrictedAuthenticationError("Only @up.edu.ph Google accounts are allowed.")
 
 
 def _get_metadata_value(claims: SupabaseClaims, *keys: str) -> str | None:
