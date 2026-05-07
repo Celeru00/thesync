@@ -7,6 +7,7 @@ import { isAppRole, isSignupRole } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
 const DEFAULT_REDIRECT_PATH = "/student";
+const ALLOWED_EMAIL_DOMAIN = "@up.edu.ph";
 
 function getSafeNextPath(nextPath: string | null) {
   if (!nextPath || !nextPath.startsWith("/") || nextPath.startsWith("//")) {
@@ -41,6 +42,10 @@ function getCalendarReturnUrl(
   const target = new URL(getSafeNextPath(nextPath), origin);
   target.searchParams.set("calendar", statusCode);
   return target;
+}
+
+function isAllowedUpEmail(email: string | null | undefined) {
+  return Boolean(email?.trim().toLowerCase().endsWith(ALLOWED_EMAIL_DOMAIN));
 }
 
 export async function GET(request: Request) {
@@ -136,6 +141,14 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.redirect(getLoginUrl(appOrigin, "google-auth-failed"));
+  }
+
+  if (!isCalendarConnectIntent && !isAllowedUpEmail(user.email)) {
+    console.log("[frontend-auth] oauth_callback_domain_rejected", {
+      email: user.email,
+    });
+    await supabase.auth.signOut();
+    return NextResponse.redirect(getLoginUrl(appOrigin, "domain-restricted"));
   }
 
   if (isCalendarConnectIntent) {

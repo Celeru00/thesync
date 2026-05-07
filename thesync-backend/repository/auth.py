@@ -36,6 +36,7 @@ from repository.supabase_client import (
 )
 
 PENDING_EMAIL_DOMAIN = "@pending.local"
+ALLOWED_EMAIL_DOMAIN = "@up.edu.ph"
 ROLE_ID_BY_APP_ROLE: dict[AppRole, int] = {
     "student": 1,
     "adviser": 2,
@@ -177,6 +178,16 @@ def _normalize_optional_text(value: str | None) -> str | None:
 def _normalize_optional_email(value: str | None) -> str | None:
     normalized = _normalize_optional_text(value)
     return normalized.lower() if normalized else None
+
+
+def _has_allowed_email_domain(email: str | None) -> bool:
+    normalized_email = _normalize_optional_email(email)
+    return bool(normalized_email and normalized_email.endswith(ALLOWED_EMAIL_DOMAIN))
+
+
+def _assert_allowed_email_domain(email: str | None) -> None:
+    if not _has_allowed_email_domain(email):
+        raise AuthenticationError("Only @up.edu.ph Google accounts are allowed.")
 
 
 def _get_metadata_value(claims: SupabaseClaims, *keys: str) -> str | None:
@@ -342,6 +353,7 @@ def resolve_authenticated_session(
     access_token: str,
 ) -> tuple[SupabaseClaims, AuthenticatedUser | None]:
     claims = decode_supabase_access_token(access_token)
+    _assert_allowed_email_domain(_resolve_email(claims))
     user_record = _load_user_record(claims.sub, with_role=True)
 
     if user_record is None or not user_record.registration_completed:
@@ -352,6 +364,7 @@ def resolve_authenticated_session(
 
 def get_authenticated_user(access_token: str) -> tuple[SupabaseClaims, AuthenticatedUser]:
     claims = decode_supabase_access_token(access_token)
+    _assert_allowed_email_domain(_resolve_email(claims))
     user_record = _load_user_record(claims.sub, with_role=True)
 
     if user_record is None:
