@@ -1,6 +1,5 @@
 import "server-only";
 
-import { cache } from "react";
 import { redirect } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 
@@ -62,7 +61,7 @@ async function resolveSupabaseAuthState(): Promise<{
   };
 }
 
-export const getServerAuthState = cache(async (): Promise<ServerAuthState> => {
+export async function getServerAuthState(): Promise<ServerAuthState> {
   const { authUser, session } = await resolveSupabaseAuthState();
 
   if (!authUser || !session?.access_token) {
@@ -78,36 +77,34 @@ export const getServerAuthState = cache(async (): Promise<ServerAuthState> => {
     session,
     appUser: await fetchCurrentAppUser(session.access_token),
   };
-});
+}
 
-export const getPublicServerAuthState = cache(
-  async (): Promise<ServerAuthState> => {
-    const { authUser, session } = await resolveSupabaseAuthState();
+export async function getPublicServerAuthState(): Promise<ServerAuthState> {
+  const { authUser, session } = await resolveSupabaseAuthState();
 
-    if (!authUser || !session?.access_token) {
-      return {
-        authUser,
-        session,
-        appUser: null,
-      };
-    }
+  if (!authUser || !session?.access_token) {
+    return {
+      authUser,
+      session,
+      appUser: null,
+    };
+  }
 
-    try {
-      return {
-        authUser,
-        session,
-        appUser: await fetchCurrentAppUser(session.access_token),
-      };
-    } catch (error) {
-      console.error("[frontend-auth] public_auth_state_fallback", error);
-      return {
-        authUser,
-        session,
-        appUser: null,
-      };
-    }
-  },
-);
+  try {
+    return {
+      authUser,
+      session,
+      appUser: await fetchCurrentAppUser(session.access_token),
+    };
+  } catch (error) {
+    console.error("[frontend-auth] public_auth_state_fallback", error);
+    return {
+      authUser,
+      session,
+      appUser: null,
+    };
+  }
+}
 
 export async function getRequiredAppUser() {
   const { appUser, authUser } = await getServerAuthState();
