@@ -15,7 +15,11 @@ type LoginPageProps = {
 
 function getErrorMessage(error?: string) {
   if (error === "google-auth-failed") {
-    return "We couldn't sign you in. Use your Google account and try again.";
+    return "We couldn't sign you in. Use your UP Google account and try again.";
+  }
+
+  if (error === "domain-restricted") {
+    return "Only Google accounts ending in @up.edu.ph are allowed.";
   }
 
   if (error === "missing-code") {
@@ -96,7 +100,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 Welcome Back
               </h1>
               <p className="pt-1 text-[1.05rem] leading-7 text-content-muted">
-                Choose your role to continue
+                Choose your role to continue with your UP email
               </p>
             </div>
 

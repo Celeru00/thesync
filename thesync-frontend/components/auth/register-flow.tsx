@@ -85,8 +85,14 @@ const degreeProgramOptions = [
   "BS Food Technology",
 ] as const;
 
+const UP_EMAIL_DOMAIN = "@up.edu.ph";
+
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+function isAllowedUpEmail(email: string) {
+  return email.trim().toLowerCase().endsWith(UP_EMAIL_DOMAIN);
 }
 
 export function RegisterFlow({
@@ -143,6 +149,11 @@ export function RegisterFlow({
   function handleEmailContinue() {
     if (!isValidEmail(email)) {
       setEmailError("Enter a valid email address");
+      return;
+    }
+
+    if (!isAllowedUpEmail(email)) {
+      setEmailError("Use your UP email ending in @up.edu.ph");
       return;
     }
 
@@ -358,9 +369,9 @@ function EmailStep({
 
         <div className="rounded-[0.95rem] border border-card-info bg-card-info px-4 py-4 text-left">
           <p className="text-body text-card-info">
-            <span className="font-semibold">Email reminder:</span> Make sure you
-            use an email address you can access, since it will be tied to your
-            TheSync account and notifications.
+            <span className="font-semibold">Email reminder:</span> Use your UP
+            email ending in <span className="font-semibold">@up.edu.ph</span>,
+            since it will be tied to your TheSync account and notifications.
           </p>
         </div>
       </div>

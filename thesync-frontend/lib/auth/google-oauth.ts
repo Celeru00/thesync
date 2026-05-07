@@ -5,6 +5,7 @@ import { buildAuthCallbackUrl, getBrowserAppOrigin } from "@/lib/auth/app-url";
 import type { AppRole } from "@/lib/auth/profile";
 
 export type GoogleAuthFlow = "login" | "signup";
+const UP_EMAIL_DOMAIN = "up.edu.ph";
 
 export async function startGoogleAuth({
   flow,
@@ -23,6 +24,9 @@ export async function startGoogleAuth({
     provider: "google",
     options: {
       redirectTo: redirectUrl.toString(),
+      queryParams: {
+        hd: UP_EMAIL_DOMAIN,
+      },
     },
   });
 }
