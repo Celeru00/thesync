@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { Calendar, CheckCircle, Clock, FileText } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -15,6 +17,16 @@ import { QuickActions } from "./quick-actions";
 import { RecentActivity } from "./recent-activity";
 import { SessionItem } from "./session-item";
 import { StatCard } from "./stat-card";
+
+function getFirstName(fullName: string) {
+  const trimmed = fullName.trim();
+
+  if (!trimmed) {
+    return "there";
+  }
+
+  return trimmed.split(/\s+/)[0] ?? "there";
+}
 
 export function StudentDashboard() {
   const { data, isLoading, error } = useStudentDashboard();
@@ -38,14 +50,13 @@ export function StudentDashboard() {
   }
 
   const { stats, upcomingSessions, recentActivity } = data;
+  const firstName = getFirstName(data.currentUserName);
 
   return (
     <div className="space-y-6">
       {/* Page header */}
       <div className="space-y-1">
-        <h1 className="text-subheading">
-          Welcome back, {data.currentUserName}! 👋
-        </h1>
+        <h1 className="text-subheading">Welcome back, {firstName}! 👋</h1>
         <p className="text-body-sm">
           Here&apos;s an overview of your thesis consultation schedule
         </p>
@@ -85,22 +96,46 @@ export function StudentDashboard() {
 
       {/* Main content — single column on mobile, sidebar on lg+ */}
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
-        <Card>
+        <Card className="flex min-h-[24rem] flex-col">
           <CardHeader className="pb-2">
             <CardTitle>Upcoming Sessions</CardTitle>
             <CardDescription>
               Your scheduled consultations and defenses
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="flex flex-1 flex-col">
             {upcomingSessions.length > 0 ? (
-              upcomingSessions.map((session) => (
-                <SessionItem key={session.id} session={session} />
-              ))
+              <div className="space-y-3">
+                {upcomingSessions.map((session) => (
+                  <SessionItem key={session.id} session={session} />
+                ))}
+              </div>
             ) : (
-              <p className="text-body-sm text-content-muted">
-                No upcoming sessions yet.
-              </p>
+              <div className="flex flex-1 items-center justify-center">
+                <div className="flex w-full max-w-xl flex-col items-center rounded-[1.35rem] border border-dashed border-brand-subtle bg-linear-to-br from-primary-tint/35 via-white to-background px-6 py-10 text-center">
+                  <div className="flex size-16 items-center justify-center rounded-2xl bg-info-soft text-info shadow-soft">
+                    <Calendar className="size-8" />
+                  </div>
+                  <h3 className="mt-5 text-card-title text-content-strong">
+                    No upcoming sessions yet
+                  </h3>
+                  <p className="mt-2 max-w-md text-body-sm text-content-muted">
+                    Once an adviser approves your request, your next
+                    consultation or defense will appear here with its exact date
+                    and time.
+                  </p>
+                  <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                    <Button asChild className="rounded-xl">
+                      <Link href="/student/consultations/request">
+                        Request Consultation
+                      </Link>
+                    </Button>
+                    <Button asChild variant="outline" className="rounded-xl">
+                      <Link href="/student/calendar">Open Calendar</Link>
+                    </Button>
+                  </div>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>
