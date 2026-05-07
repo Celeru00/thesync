@@ -10,7 +10,7 @@ import {
   type AppSessionUser,
 } from "@/lib/auth/backend";
 import { getDashboardPathForRole, type AppRole } from "@/lib/auth/profile";
-import { isRefreshTokenNotFoundError } from "@/lib/supabase/errors";
+import { isRecoverableSessionError } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
 
 type ServerAuthState = {
@@ -29,22 +29,28 @@ const resolveSupabaseAuthState = cache(
     let session: Session | null = null;
 
     try {
-      const [
-        {
-          data: { user: resolvedUser },
-        },
-        {
-          data: { session: resolvedSession },
-        },
-      ] = await Promise.all([
-        supabase.auth.getUser(),
-        supabase.auth.getSession(),
-      ]);
+      const {
+        data: { user: resolvedUser },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) {
+        throw userError;
+      }
 
       user = resolvedUser;
+      const {
+        data: { session: resolvedSession },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        throw sessionError;
+      }
+
       session = resolvedSession;
     } catch (error) {
-      if (isRefreshTokenNotFoundError(error)) {
+      if (isRecoverableSessionError(error)) {
         return {
           authUser: null,
           session: null,

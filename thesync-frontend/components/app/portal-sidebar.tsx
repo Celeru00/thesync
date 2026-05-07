@@ -109,6 +109,7 @@ export function PortalSidebar({ currentUser, avatarUrl }: PortalSidebarProps) {
         avatarUrl,
       }}
       logoutHref="/auth/signout"
+      logoutMethod="post"
       className="min-h-fit w-full md:sticky md:top-0 md:h-screen md:w-68 md:shrink-0 md:self-start md:overflow-y-auto"
     />
   );
