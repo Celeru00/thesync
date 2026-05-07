@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TheSync Design System",
+  title: "TheSync - Thesis Consultation Scheduling System",
   description:
     "Design tokens, Tailwind theme variables, and shadcn/ui primitives for the TheSync frontend.",
 };
