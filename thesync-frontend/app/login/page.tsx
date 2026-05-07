@@ -4,7 +4,7 @@ import { AlertCircle, CalendarDays } from "lucide-react";
 import { GoogleRoleButton } from "@/components/auth/google-role-button";
 import { GoogleSignupLink } from "@/components/auth/google-signup-link";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { getServerAuthState } from "@/lib/auth/server";
+import { getPublicServerAuthState } from "@/lib/auth/server";
 import { getDashboardPathForRole } from "@/lib/auth/profile";
 
 type LoginPageProps = {
@@ -59,7 +59,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     ? params.error[0]
     : params.error;
   const errorMessage = getErrorMessage(errorCode);
-  const { appUser, authUser } = await getServerAuthState();
+  const { appUser, authUser } = await getPublicServerAuthState();
 
   if (!errorCode && appUser) {
     redirect(getDashboardPathForRole(appUser.app_role));

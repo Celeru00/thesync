@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { RegisterFlow } from "@/components/auth/register-flow";
-import { getServerAuthState } from "@/lib/auth/server";
+import { getPublicServerAuthState } from "@/lib/auth/server";
 import {
   getAuthPrefill,
   getDashboardPathForRole,
@@ -22,7 +22,7 @@ export default async function RegisterPage({
   const params = await searchParams;
   const roleParam = Array.isArray(params.role) ? params.role[0] : params.role;
   const initialRole = isSignupRole(roleParam) ? roleParam : null;
-  const { authUser, appUser } = await getServerAuthState();
+  const { authUser, appUser } = await getPublicServerAuthState();
 
   if (!authUser) {
     redirect("/login");
