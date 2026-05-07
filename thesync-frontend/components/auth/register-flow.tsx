@@ -239,7 +239,7 @@ export function RegisterFlow({
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-page text-page">
+    <main className="relative min-h-screen overflow-x-hidden overflow-y-auto bg-page text-page">
       <div
         aria-hidden
         className="absolute inset-0 bg-linear-to-b from-primary-tint/55 via-background to-background"
@@ -249,8 +249,8 @@ export function RegisterFlow({
         className="absolute left-1/2 top-[44%] size-[44rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-linear-to-br from-primary-tint via-white to-background opacity-90 blur-3xl"
       />
 
-      <div className="relative flex min-h-screen flex-col items-center justify-center px-6 py-10">
-        <div className="flex w-full max-w-[56rem] flex-col items-center text-center md:-translate-y-8 lg:-translate-y-10">
+      <div className="relative flex min-h-screen w-full flex-col items-center justify-start px-6 py-12 sm:py-14 lg:py-16">
+        <div className="flex w-full max-w-[56rem] flex-col items-center text-center">
           <div className="mb-4 flex items-center gap-3.5">
             <LogoMark />
             <div className="text-[2.1rem] leading-none font-semibold tracking-[-0.045em]">
