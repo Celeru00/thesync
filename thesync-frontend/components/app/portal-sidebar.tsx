@@ -89,9 +89,10 @@ const portalConfigs = {
 
 type PortalSidebarProps = {
   currentUser: AppSessionUser;
+  avatarUrl?: string | null;
 };
 
-export function PortalSidebar({ currentUser }: PortalSidebarProps) {
+export function PortalSidebar({ currentUser, avatarUrl }: PortalSidebarProps) {
   const pathname = usePathname();
   const config = portalConfigs[currentUser.app_role];
 
@@ -105,6 +106,7 @@ export function PortalSidebar({ currentUser }: PortalSidebarProps) {
       user={{
         name: currentUser.full_name,
         email: currentUser.email,
+        avatarUrl,
       }}
       logoutHref="/auth/signout"
       className="min-h-fit w-full md:sticky md:top-0 md:h-screen md:w-68 md:shrink-0 md:self-start md:overflow-y-auto"

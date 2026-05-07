@@ -64,6 +64,8 @@ export function getAuthAvatarUrl(user: User | null) {
       : {};
 
   return (
+    getGoogleIdentityValue(user, "avatar_url") ||
+    getGoogleIdentityValue(user, "picture") ||
     getMetadataValue(metadata, "avatar_url") ||
     getMetadataValue(metadata, "picture") ||
     null
