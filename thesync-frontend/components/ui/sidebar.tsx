@@ -26,6 +26,7 @@ type SidebarProps = Omit<React.ComponentProps<"aside">, "title"> & {
   activeHref?: string;
   user?: SidebarUser;
   logoutHref?: string;
+  logoutMethod?: "get" | "post";
   logoutLabel?: string;
 };
 
@@ -90,6 +91,7 @@ function Sidebar({
   activeHref,
   user,
   logoutHref,
+  logoutMethod = "get",
   logoutLabel = "Logout",
   className,
   style,
@@ -112,6 +114,7 @@ function Sidebar({
         {brandHref ? (
           <Link
             href={brandHref}
+            prefetch={false}
             className="inline-flex rounded-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sidebar-ring/20"
           >
             <BrandBlock name={brandName} subtitle={brandSubtitle} />
@@ -135,6 +138,7 @@ function Sidebar({
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  prefetch={false}
                   aria-current={active ? "page" : undefined}
                   className={cn(
                     "flex h-12 items-center gap-3 rounded-2xl px-4 text-[1.0625rem] font-medium transition-colors outline-none focus-visible:ring-4 focus-visible:ring-sidebar-ring/20",
@@ -173,9 +177,22 @@ function Sidebar({
           </div>
         ) : null}
 
-        {logoutHref ? (
+        {logoutHref && logoutMethod === "post" ? (
+          <form action={logoutHref} method="post">
+            <button
+              type="submit"
+              className="flex h-11 w-full items-center gap-3 rounded-2xl px-3 text-left text-[1.0625rem] font-medium text-sidebar-foreground/78 transition-colors outline-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-4 focus-visible:ring-sidebar-ring/20"
+            >
+              <LogOut className="size-5 shrink-0" />
+              <span>{logoutLabel}</span>
+            </button>
+          </form>
+        ) : null}
+
+        {logoutHref && logoutMethod === "get" ? (
           <Link
             href={logoutHref}
+            prefetch={false}
             className="flex h-11 items-center gap-3 rounded-2xl px-3 text-[1.0625rem] font-medium text-sidebar-foreground/78 transition-colors outline-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-4 focus-visible:ring-sidebar-ring/20"
           >
             <LogOut className="size-5 shrink-0" />

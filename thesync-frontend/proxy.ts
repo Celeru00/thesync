@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
 import { getSupabaseEnv } from "@/lib/supabase/env";
+import { isRecoverableSessionError } from "@/lib/supabase/errors";
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
@@ -34,7 +35,17 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getUser();
+  try {
+    const { error } = await supabase.auth.getUser();
+
+    if (error && !isRecoverableSessionError(error)) {
+      throw error;
+    }
+  } catch (error) {
+    if (!isRecoverableSessionError(error)) {
+      throw error;
+    }
+  }
 
   return response;
 }

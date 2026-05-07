@@ -7,7 +7,6 @@ import {
   getDashboardPathForRole,
   isSignupRole,
 } from "@/lib/auth/profile";
-import { createClient } from "@/lib/supabase/server";
 
 type RegisterPageProps = {
   searchParams: Promise<{
@@ -32,15 +31,10 @@ export default async function RegisterPage({
     redirect(getDashboardPathForRole(appUser.app_role));
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   return (
     <RegisterFlow
       initialRole={initialRole}
-      initialPrefill={getAuthPrefill(user)}
+      initialPrefill={getAuthPrefill(authUser)}
     />
   );
 }
