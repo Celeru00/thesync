@@ -423,6 +423,19 @@ class DefaultScheduleStatusService(ScheduleStatusService):
                     f"{_format_datetime(updated_schedule.scheduled_at)}."
                 ),
             )
+            adviser_email, adviser_name = self._load_recipient_email_context(
+                updated_schedule.adviser_id
+            )
+            self.email_service.send_schedule_rescheduled(
+                recipient_email=adviser_email,
+                recipient_name=adviser_name,
+                rescheduled_by_student=True,
+                student_name=current_user.full_name,
+                adviser_name=adviser_name,
+                topic=updated_schedule.topic,
+                scheduled_at=updated_schedule.scheduled_at,
+                rescheduled_by_name=current_user.full_name,
+            )
         else:
             self._create_notification(
                 user_id=updated_schedule.student_id,
@@ -436,10 +449,13 @@ class DefaultScheduleStatusService(ScheduleStatusService):
                 updated_schedule.student_id
             )
             self.email_service.send_schedule_rescheduled(
-                student_email=student_email,
+                recipient_email=student_email,
+                recipient_name=student_name,
+                rescheduled_by_student=False,
                 student_name=student_name,
                 adviser_name=current_user.full_name,
                 topic=updated_schedule.topic,
                 scheduled_at=updated_schedule.scheduled_at,
+                rescheduled_by_name=current_user.full_name,
             )
         return updated_schedule

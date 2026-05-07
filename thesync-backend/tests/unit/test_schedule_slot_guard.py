@@ -59,7 +59,7 @@ class _FakeScheduleRepository:
             items=items,
             total=len(items),
             page=filters.page,
-            page_size=filters.page_size,
+            page_size=filters.limit,
         )
 
     def adviser_has_schedule_conflict(

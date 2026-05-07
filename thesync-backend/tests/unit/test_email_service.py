@@ -90,6 +90,57 @@ class SendGridEmailServiceTests(unittest.TestCase):
         self.assertEqual(service.delivered_payloads, [])
         self.assertIn("delivery_failed", stderr.getvalue())
 
+    def test_rescheduled_email_uses_dynamic_template_payload(self) -> None:
+        service = _RecordingSendGridEmailService(
+            Settings(
+                sendgrid_api_key="sendgrid-key",
+                sendgrid_from_email="noreply@example.com",
+                sendgrid_template_schedule_rescheduled="d-rescheduled",
+                frontend_url="https://thesync.example.com",
+            )
+        )
+
+        service.send_schedule_rescheduled(
+            recipient_email="adviser@example.com",
+            recipient_name="Adviser User",
+            rescheduled_by_student=True,
+            student_name="Student User",
+            adviser_name="Adviser User",
+            topic="CMSC 200A Proposal Defense",
+            scheduled_at=datetime(2026, 5, 11, 8, 0, tzinfo=UTC),
+            rescheduled_by_name="Student User",
+        )
+
+        self.assertEqual(len(service.delivered_payloads), 1)
+        payload = service.delivered_payloads[0]
+        self.assertEqual(payload["template_id"], "d-rescheduled")
+        personalization = payload["personalizations"][0]
+        self.assertEqual(personalization["to"][0]["email"], "adviser@example.com")
+        self.assertEqual(
+            personalization["dynamic_template_data"]["rescheduled_by_student"],
+            True,
+        )
+        self.assertEqual(
+            personalization["dynamic_template_data"]["rescheduled_by_name"],
+            "Student User",
+        )
+        self.assertEqual(
+            personalization["dynamic_template_data"]["counterparty_role"],
+            "adviser",
+        )
+        self.assertEqual(
+            personalization["dynamic_template_data"]["review_url"],
+            "https://thesync.example.com/adviser/consultations",
+        )
+        self.assertEqual(
+            personalization["dynamic_template_data"]["scheduled_date"],
+            "May 11, 2026",
+        )
+        self.assertEqual(
+            personalization["dynamic_template_data"]["scheduled_time"],
+            "8:00 AM",
+        )
+
     def test_no_email_is_sent_when_recipient_email_is_missing(self) -> None:
         service = _RecordingSendGridEmailService(
             Settings(
@@ -100,11 +151,14 @@ class SendGridEmailServiceTests(unittest.TestCase):
         )
 
         service.send_schedule_rescheduled(
-            student_email=None,
+            recipient_email=None,
+            recipient_name="Student User",
+            rescheduled_by_student=False,
             student_name="Student User",
             adviser_name="Adviser User",
             topic="CMSC 200A Proposal Defense",
             scheduled_at=datetime(2026, 5, 11, 8, 0, tzinfo=UTC),
+            rescheduled_by_name="Adviser User",
         )
 
         self.assertEqual(service.delivered_payloads, [])

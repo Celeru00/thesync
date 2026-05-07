@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 
 from model.auth import AuthenticatedUser
 from model.schedule import Schedule, ScheduleRescheduleRequest
+from model.user import User
 from usecase.schedule_status_service import DefaultScheduleStatusService
 from usecase.schedules import ScheduleConflictError, ScheduleForbiddenError
 
@@ -39,6 +40,23 @@ def _build_schedule(
         topic="CMSC 200A Proposal Defense",
         requested_at=datetime(2026, 5, 6, 10, 0, tzinfo=UTC),
         scheduled_at=scheduled_at or datetime(2026, 5, 10, 10, 30, tzinfo=UTC),
+        created_at=datetime(2026, 5, 6, 10, 0, tzinfo=UTC),
+    )
+
+
+def _build_plain_user(
+    *,
+    user_id: UUID,
+    role_name: str,
+    full_name: str,
+    email: str,
+) -> User:
+    return User(
+        id=user_id,
+        role_id=1,
+        role_name=role_name,
+        full_name=full_name,
+        email=email,
         created_at=datetime(2026, 5, 6, 10, 0, tzinfo=UTC),
     )
 
@@ -133,10 +151,36 @@ class _FakeAuditRepository:
         )
 
 
+class _FakeUserRepository:
+    def __init__(self, users: list[User]) -> None:
+        self.users = {user.id: user for user in users}
+
+    def get_by_id(self, user_id: UUID | str) -> User | None:
+        try:
+            normalized_user_id = UUID(str(user_id))
+        except ValueError:
+            return None
+        return self.users.get(normalized_user_id)
+
+
+class _FakeEmailService:
+    def __init__(self) -> None:
+        self.rescheduled_calls: list[dict[str, object]] = []
+
+    def send_schedule_rescheduled(self, **kwargs) -> None:
+        self.rescheduled_calls.append(kwargs)
+
+
 class ScheduleStatusRescheduleTests(unittest.TestCase):
     def test_student_can_reschedule_approved_schedule(self) -> None:
         student = _build_user(role_name="student")
         adviser = _build_user(role_name="adviser")
+        adviser_record = _build_plain_user(
+            user_id=adviser.id,
+            role_name="adviser",
+            full_name=adviser.full_name,
+            email=adviser.email,
+        )
         schedule = _build_schedule(
             student_id=student.id,
             adviser_id=adviser.id,
@@ -145,11 +189,14 @@ class ScheduleStatusRescheduleTests(unittest.TestCase):
         schedule_repository = _FakeScheduleRepository(schedule)
         notification_repository = _FakeNotificationRepository()
         audit_repository = _FakeAuditRepository()
+        email_service = _FakeEmailService()
         service = DefaultScheduleStatusService(
             schedule_repository=schedule_repository,
             availability_repository=_FakeAvailabilityRepository(),
             notification_repository=notification_repository,
             audit_repository=audit_repository,
+            user_repository=_FakeUserRepository([adviser_record]),
+            email_service=email_service,
         )
         new_time = datetime(2026, 5, 12, 14, 0, tzinfo=UTC)
 
@@ -177,6 +224,52 @@ class ScheduleStatusRescheduleTests(unittest.TestCase):
         ]
         self.assertEqual(len(adviser_notifications), 1)
         self.assertIn("requested to move", str(adviser_notifications[0]["message"]).lower())
+        self.assertEqual(len(email_service.rescheduled_calls), 1)
+        self.assertEqual(email_service.rescheduled_calls[0]["recipient_email"], adviser.email)
+        self.assertEqual(email_service.rescheduled_calls[0]["rescheduled_by_student"], True)
+
+    def test_adviser_can_reschedule_approved_schedule_and_notify_student(self) -> None:
+        student = _build_user(role_name="student")
+        adviser = _build_user(role_name="adviser")
+        student_record = _build_plain_user(
+            user_id=student.id,
+            role_name="student",
+            full_name=student.full_name,
+            email=student.email,
+        )
+        schedule = _build_schedule(
+            student_id=student.id,
+            adviser_id=adviser.id,
+            status_id=2,
+        )
+        schedule_repository = _FakeScheduleRepository(schedule)
+        notification_repository = _FakeNotificationRepository()
+        audit_repository = _FakeAuditRepository()
+        email_service = _FakeEmailService()
+        service = DefaultScheduleStatusService(
+            schedule_repository=schedule_repository,
+            availability_repository=_FakeAvailabilityRepository(),
+            notification_repository=notification_repository,
+            audit_repository=audit_repository,
+            user_repository=_FakeUserRepository([student_record]),
+            email_service=email_service,
+        )
+        new_time = datetime(2026, 5, 12, 14, 0, tzinfo=UTC)
+
+        updated_schedule = service.reschedule(
+            adviser,
+            schedule.id,
+            payload=ScheduleRescheduleRequest(scheduled_at=new_time, remarks=None),
+        )
+
+        self.assertEqual(updated_schedule.status_id, 6)
+        self.assertEqual(updated_schedule.scheduled_at, new_time)
+        self.assertEqual(schedule_repository.updated_statuses, [(schedule.id, 6, new_time)])
+        self.assertEqual(len(notification_repository.created), 1)
+        self.assertIn("was moved to", str(notification_repository.created[0]["message"]).lower())
+        self.assertEqual(len(email_service.rescheduled_calls), 1)
+        self.assertEqual(email_service.rescheduled_calls[0]["recipient_email"], student.email)
+        self.assertEqual(email_service.rescheduled_calls[0]["rescheduled_by_student"], False)
 
     def test_student_cannot_reschedule_non_approved_schedule(self) -> None:
         student = _build_user(role_name="student")

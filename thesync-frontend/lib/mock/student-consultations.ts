@@ -2,6 +2,7 @@ export type ConsultationRequestType = "consultation" | "defense";
 export type ConsultationRequestStatus =
   | "approved"
   | "pending"
+  | "rescheduled"
   | "completed"
   | "rejected"
   | "cancelled";

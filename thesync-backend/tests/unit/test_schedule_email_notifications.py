@@ -319,7 +319,7 @@ class ScheduleEmailNotificationTests(unittest.TestCase):
             "https://meet.google.com/abc-defg-hij",
         )
 
-    def test_reject_and_reschedule_send_student_emails(self) -> None:
+    def test_reject_and_reschedule_send_expected_emails(self) -> None:
         student_id = uuid4()
         adviser = _build_user(role_name="adviser", full_name="Adviser User")
         student = _build_plain_user(
@@ -352,6 +352,52 @@ class ScheduleEmailNotificationTests(unittest.TestCase):
             "Needs a clearer scope.",
         )
 
+        student_reschedule_schedule = _build_schedule(
+            student_id=student_id,
+            adviser_id=adviser.id,
+            status_id=2,
+        )
+        student_reschedule_service = DefaultScheduleStatusService(
+            schedule_repository=_StatusScheduleRepository(student_reschedule_schedule),
+            availability_repository=_FakeAvailabilityRepository([]),
+            notification_repository=_FakeNotificationRepository(),
+            audit_repository=_FakeAuditRepository(),
+            user_repository=_FakeUserRepository(
+                [
+                    _build_plain_user(
+                        user_id=adviser.id,
+                        role_name="adviser",
+                        full_name="Adviser User",
+                        email="adviser@example.com",
+                    )
+                ]
+            ),
+            email_service=email_service,
+        )
+        student_actor = _build_user(
+            role_name="student",
+            user_id=student_id,
+            full_name="Student User",
+            email="student@example.com",
+        )
+        student_requested_time = datetime(2026, 5, 11, 9, 0, tzinfo=UTC)
+
+        student_reschedule_service.reschedule(
+            student_actor,
+            student_reschedule_schedule.id,
+            payload=ScheduleRescheduleRequest(
+                scheduled_at=student_requested_time,
+                remarks=None,
+            ),
+        )
+
+        self.assertEqual(len(email_service.rescheduled_calls), 1)
+        self.assertEqual(
+            email_service.rescheduled_calls[0]["recipient_email"],
+            "adviser@example.com",
+        )
+        self.assertEqual(email_service.rescheduled_calls[0]["rescheduled_by_student"], True)
+
         reschedule_schedule = _build_schedule(
             student_id=student_id, adviser_id=adviser.id, status_id=1
         )
@@ -371,8 +417,13 @@ class ScheduleEmailNotificationTests(unittest.TestCase):
             payload=ScheduleRescheduleRequest(scheduled_at=new_time, remarks=None),
         )
 
-        self.assertEqual(len(email_service.rescheduled_calls), 1)
-        self.assertEqual(email_service.rescheduled_calls[0]["scheduled_at"], new_time)
+        self.assertEqual(len(email_service.rescheduled_calls), 2)
+        self.assertEqual(email_service.rescheduled_calls[1]["scheduled_at"], new_time)
+        self.assertEqual(
+            email_service.rescheduled_calls[1]["recipient_email"],
+            "student@example.com",
+        )
+        self.assertEqual(email_service.rescheduled_calls[1]["rescheduled_by_student"], False)
 
     def test_student_cancel_sends_cancelled_email_to_adviser(self) -> None:
         student = _build_user(role_name="student", full_name="Student User")
