@@ -26,6 +26,7 @@ from usecase.dashboard import (
 STUDENT_ROLE_NAME: Final[str] = "student"
 ADVISER_ROLE_NAME: Final[str] = "adviser"
 UPCOMING_SESSION_STATUSES: Final[set[str]] = {"approved", "pending", "rescheduled"}
+PENDING_APPROVAL_STATUSES: Final[set[str]] = {"pending", "rescheduled"}
 ACTIVE_ADVISEE_EXCLUDED_STATUSES: Final[set[str]] = {"cancelled", "rejected"}
 TODAYS_SESSION_STATUSES: Final[set[str]] = {"approved", "rescheduled"}
 MONTHLY_SESSION_EXCLUDED_STATUSES: Final[set[str]] = {"cancelled", "rejected"}
@@ -261,7 +262,7 @@ class DefaultDashboardService(DashboardService):
             status_name = _normalized_status_name(schedule)
             scheduled_at = _normalize_datetime(schedule.scheduled_at)
 
-            if status_name == "pending":
+            if status_name in PENDING_APPROVAL_STATUSES:
                 pending_approvals += 1
 
             if status_name not in ACTIVE_ADVISEE_EXCLUDED_STATUSES:

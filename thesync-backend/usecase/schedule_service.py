@@ -397,6 +397,7 @@ class DefaultScheduleService(ScheduleService):
         schedule = self._get_schedule_or_raise(schedule_id)
         pending_status_id = self._get_required_status_id(PENDING_STATUS_NAME)
         approved_status_id = self._get_required_status_id(APPROVED_STATUS_NAME)
+        rescheduled_status_id = self._get_required_status_id(RESCHEDULED_STATUS_NAME)
         cancelled_status_id = self._get_required_status_id(CANCELLED_STATUS_NAME)
 
         if schedule.status_id == cancelled_status_id:
@@ -417,8 +418,10 @@ class DefaultScheduleService(ScheduleService):
             if schedule.adviser_id != current_user.id:
                 raise ScheduleForbiddenError("Only the assigned adviser can cancel this schedule.")
 
-            if schedule.status_id != approved_status_id:
-                raise ScheduleConflictError("Only approved schedules can be cancelled by advisers.")
+            if schedule.status_id not in {approved_status_id, rescheduled_status_id}:
+                raise ScheduleConflictError(
+                    "Only approved or rescheduled schedules can be cancelled by advisers."
+                )
 
             actor_label = "adviser"
             audit_remarks = "Schedule cancelled by adviser."

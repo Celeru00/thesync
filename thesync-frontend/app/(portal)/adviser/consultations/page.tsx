@@ -44,6 +44,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useApproveSchedule,
+  useCancelSchedule,
   useRejectSchedule,
   useRescheduleSchedule,
   useSchedules,
@@ -87,6 +88,7 @@ export default function AdviserConsultationsPage() {
     statusFilter === "all" ? undefined : { status: statusFilter },
   );
   const approveScheduleMutation = useApproveSchedule();
+  const cancelScheduleMutation = useCancelSchedule();
   const rejectScheduleMutation = useRejectSchedule();
   const rescheduleScheduleMutation = useRescheduleSchedule();
   const [optimisticStatuses, setOptimisticStatuses] = useState<
@@ -99,11 +101,15 @@ export default function AdviserConsultationsPage() {
   const [rejectTarget, setRejectTarget] = useState<ScheduleListItem | null>(
     null,
   );
+  const [cancelTarget, setCancelTarget] = useState<ScheduleListItem | null>(
+    null,
+  );
   const [rejectRemarks, setRejectRemarks] = useState("");
   const [rejectError, setRejectError] = useState<string | null>(null);
   const [rescheduleTarget, setRescheduleTarget] =
     useState<ScheduleListItem | null>(null);
   const [rescheduleAt, setRescheduleAt] = useState("");
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const [rescheduleRemarks, setRescheduleRemarks] = useState("");
   const [rescheduleError, setRescheduleError] = useState<string | null>(null);
 
@@ -174,6 +180,31 @@ export default function AdviserConsultationsPage() {
         error instanceof Error
           ? error.message
           : "We couldn't reject this request right now.",
+      );
+    }
+  }
+
+  async function handleCancel() {
+    if (!cancelTarget) {
+      return;
+    }
+
+    setCancelError(null);
+    setActionError(null);
+    setOptimisticStatuses((current) => ({
+      ...current,
+      [cancelTarget.id]: "cancelled",
+    }));
+
+    try {
+      await cancelScheduleMutation.mutateAsync(cancelTarget.id);
+      setCancelTarget(null);
+    } catch (error) {
+      setOptimisticStatuses((current) => removeKey(current, cancelTarget.id));
+      setCancelError(
+        error instanceof Error
+          ? error.message
+          : "We couldn't cancel this consultation right now.",
       );
     }
   }
@@ -274,7 +305,9 @@ export default function AdviserConsultationsPage() {
               }}
               onReject={() => {
                 setRejectTarget(request);
+                setCancelTarget(null);
                 setRejectRemarks("");
+                setCancelError(null);
                 setRejectError(null);
               }}
               isApproving={
@@ -285,15 +318,25 @@ export default function AdviserConsultationsPage() {
                 rejectScheduleMutation.isPending &&
                 rejectScheduleMutation.variables?.id === request.id
               }
+              isCancelling={
+                cancelScheduleMutation.isPending &&
+                cancelScheduleMutation.variables === request.id
+              }
               isRescheduling={
                 rescheduleScheduleMutation.isPending &&
                 rescheduleScheduleMutation.variables?.id === request.id
               }
               onReschedule={() => {
                 setRescheduleTarget(request);
+                setCancelTarget(null);
                 setRescheduleAt(toDateTimeLocalValue(request.scheduled_at));
+                setCancelError(null);
                 setRescheduleRemarks("");
                 setRescheduleError(null);
+              }}
+              onCancel={() => {
+                setCancelTarget(request);
+                setCancelError(null);
               }}
             />
           ))
@@ -379,6 +422,70 @@ export default function AdviserConsultationsPage() {
                 </>
               ) : (
                 "Reject Request"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={cancelTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCancelTarget(null);
+            setCancelError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg border border-brand-subtle bg-surface-card">
+          <DialogHeader>
+            <DialogTitle>Cancel Consultation</DialogTitle>
+            <DialogDescription className="text-content-muted">
+              This will cancel the consultation and notify the student.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogBody className="space-y-4">
+            {cancelTarget ? (
+              <div className="rounded-[1rem] border border-surface bg-surface-muted-soft px-4 py-4">
+                <div className="text-body-sm text-content-muted">Request</div>
+                <div className="mt-1 text-card-title">{cancelTarget.topic}</div>
+                <div className="mt-1 text-body text-content-muted">
+                  {cancelTarget.student_full_name}
+                </div>
+              </div>
+            ) : null}
+
+            {cancelError ? (
+              <div className="rounded-[1rem] border border-destructive/25 bg-destructive/10 px-4 py-3 text-body text-destructive">
+                {cancelError}
+              </div>
+            ) : null}
+          </DialogBody>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCancelTarget(null)}
+            >
+              Keep Consultation
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={cancelScheduleMutation.isPending}
+              onClick={() => {
+                void handleCancel();
+              }}
+            >
+              {cancelScheduleMutation.isPending ? (
+                <>
+                  <LoaderCircle className="animate-spin" />
+                  Cancelling...
+                </>
+              ) : (
+                "Cancel Consultation"
               )}
             </Button>
           </DialogFooter>
@@ -486,27 +593,42 @@ function RequestCard({
   isRescheduling,
   isApproving,
   isRejecting,
+  isCancelling,
   actionError,
   optimisticStatus,
   onApprove,
   onReject,
   onReschedule,
+  onCancel,
   request,
 }: {
   isRescheduling: boolean;
   isApproving: boolean;
   isRejecting: boolean;
+  isCancelling: boolean;
   actionError: string | null;
   optimisticStatus?: ScheduleQueueStatus;
   onApprove: () => void;
   onReject: () => void;
   onReschedule: () => void;
+  onCancel: () => void;
   request: ScheduleListItem;
 }) {
   const statusName =
     optimisticStatus ?? normalizeRequestStatus(request.status_name);
   const typeName = normalizeRequestType(request.type_name);
-  const showPendingActions = statusName === "pending";
+  const showApprovalActions =
+    statusName === "pending" || statusName === "rescheduled";
+  const showRescheduleAction =
+    statusName === "pending" ||
+    statusName === "approved" ||
+    statusName === "rescheduled";
+  const showCancelAction =
+    statusName === "approved" || statusName === "rescheduled";
+  const hasActions =
+    showApprovalActions || showRescheduleAction || showCancelAction;
+  const isActionPending =
+    isApproving || isRejecting || isRescheduling || isCancelling;
 
   return (
     <ListItem className="px-6 py-6">
@@ -563,49 +685,76 @@ function RequestCard({
         />
       </div>
 
-      {showPendingActions ? (
+      {hasActions ? (
         <>
           <Separator className="my-6" />
           <div className="flex flex-wrap gap-3">
-            <Button
-              type="button"
-              size="sm"
-              className="bg-success text-white hover:bg-success/90"
-              onClick={onApprove}
-              disabled={isApproving || isRejecting || isRescheduling}
-            >
-              {isApproving ? (
-                <LoaderCircle className="animate-spin" />
-              ) : (
-                <CalendarCheck />
-              )}
-              Approve
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
-              onClick={onReject}
-              disabled={isApproving || isRejecting || isRescheduling}
-            >
-              {isRejecting ? <LoaderCircle className="animate-spin" /> : <X />}
-              Reject
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onReschedule}
-              disabled={isApproving || isRejecting || isRescheduling}
-            >
-              {isRescheduling ? (
-                <LoaderCircle className="animate-spin" />
-              ) : (
-                <RefreshCcw />
-              )}
-              Reschedule
-            </Button>
+            {showApprovalActions ? (
+              <Button
+                type="button"
+                size="sm"
+                className="bg-success text-white hover:bg-success/90"
+                onClick={onApprove}
+                disabled={isActionPending}
+              >
+                {isApproving ? (
+                  <LoaderCircle className="animate-spin" />
+                ) : (
+                  <CalendarCheck />
+                )}
+                Approve
+              </Button>
+            ) : null}
+            {showApprovalActions ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
+                onClick={onReject}
+                disabled={isActionPending}
+              >
+                {isRejecting ? (
+                  <LoaderCircle className="animate-spin" />
+                ) : (
+                  <X />
+                )}
+                Reject
+              </Button>
+            ) : null}
+            {showRescheduleAction ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onReschedule}
+                disabled={isActionPending}
+              >
+                {isRescheduling ? (
+                  <LoaderCircle className="animate-spin" />
+                ) : (
+                  <RefreshCcw />
+                )}
+                Reschedule
+              </Button>
+            ) : null}
+            {showCancelAction ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
+                onClick={onCancel}
+                disabled={isActionPending}
+              >
+                {isCancelling ? (
+                  <LoaderCircle className="animate-spin" />
+                ) : (
+                  <X />
+                )}
+                Cancel
+              </Button>
+            ) : null}
           </div>
         </>
       ) : null}

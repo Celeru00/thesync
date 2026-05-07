@@ -82,11 +82,14 @@ class EmailService:
     def send_schedule_rescheduled(
         self,
         *,
-        student_email: str | None,
+        recipient_email: str | None,
+        recipient_name: str | None,
+        rescheduled_by_student: bool,
         student_name: str | None,
         adviser_name: str | None,
         topic: str,
         scheduled_at: datetime | None,
+        rescheduled_by_name: str | None,
     ) -> None:
         raise NotImplementedError
 
@@ -269,21 +272,40 @@ class SendGridEmailService(EmailService):
     def send_schedule_rescheduled(
         self,
         *,
-        student_email: str | None,
+        recipient_email: str | None,
+        recipient_name: str | None,
+        rescheduled_by_student: bool,
         student_name: str | None,
         adviser_name: str | None,
         topic: str,
         scheduled_at: datetime | None,
+        rescheduled_by_name: str | None,
     ) -> None:
+        review_path = (
+            "/adviser/consultations" if rescheduled_by_student else "/student/consultations"
+        )
+        review_url = f"{self._settings.frontend_url.rstrip('/')}{review_path}"
         self._send_dynamic_template(
-            recipient_email=student_email,
-            recipient_name=student_name,
+            recipient_email=recipient_email,
+            recipient_name=recipient_name,
             template_id=self._settings.sendgrid_template_schedule_rescheduled,
             dynamic_template_data={
+                "recipient_name": recipient_name,
+                "rescheduled_by_student": rescheduled_by_student,
                 "student_name": student_name,
                 "adviser_name": adviser_name,
                 "topic": topic,
                 "scheduled_at": _format_datetime(scheduled_at),
+                "scheduled_date": _format_display_date(scheduled_at),
+                "scheduled_time": _format_display_time(scheduled_at),
+                "rescheduled_by_name": rescheduled_by_name,
+                "rescheduled_by_role": "student" if rescheduled_by_student else "adviser",
+                "counterparty_name": adviser_name if rescheduled_by_student else student_name,
+                "counterparty_role": "adviser" if rescheduled_by_student else "student",
+                "review_url": review_url,
+                "review_label": (
+                    "Review Request" if rescheduled_by_student else "View Consultation"
+                ),
             },
         )
 

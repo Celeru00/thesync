@@ -49,6 +49,7 @@ const statusOptions: Array<{
   { value: "all", label: "All Status" },
   { value: "approved", label: "Approved" },
   { value: "pending", label: "Pending" },
+  { value: "rescheduled", label: "Rescheduled" },
   { value: "completed", label: "Completed" },
   { value: "rejected", label: "Rejected" },
   { value: "cancelled", label: "Cancelled" },
@@ -383,6 +384,8 @@ function getStatusVariant(status: ConsultationRequestStatus) {
       return "success";
     case "pending":
       return "warning";
+    case "rescheduled":
+      return "info";
     case "completed":
       return "outline";
     case "rejected":
@@ -406,6 +409,7 @@ function normalizeRequestStatus(value: string): ConsultationRequestStatus {
   if (
     value === "approved" ||
     value === "pending" ||
+    value === "rescheduled" ||
     value === "completed" ||
     value === "rejected" ||
     value === "cancelled"
