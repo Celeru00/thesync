@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Poppins } from "next/font/google";
 
-import { AuthSessionRecovery } from "@/components/auth/auth-session-recovery";
 import { ReactQueryProvider } from "@/components/providers/react-query-provider";
 import "./globals.css";
 
@@ -34,10 +33,7 @@ export default function RootLayout({
       data-scroll-behavior="smooth"
     >
       <body className="flex min-h-full flex-col">
-        <ReactQueryProvider>
-          <AuthSessionRecovery />
-          {children}
-        </ReactQueryProvider>
+        <ReactQueryProvider>{children}</ReactQueryProvider>
       </body>
     </html>
   );
