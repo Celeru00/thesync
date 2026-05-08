@@ -6,6 +6,7 @@ from typing import Literal
 from uuid import UUID, uuid4
 
 from model.auth import AuthenticatedUser
+from model.availability import AvailabilitySlot
 from model.schedule import Schedule, ScheduleRescheduleRequest
 from model.user import User
 from usecase.schedule_status_service import DefaultScheduleStatusService
@@ -111,6 +112,43 @@ class _FakeScheduleRepository:
 class _FakeAvailabilityRepository:
     def list_by_adviser(self, adviser_id: UUID | str) -> list[object]:
         return []
+
+    def get_free_slots(
+        self,
+        adviser_id: UUID | str,
+        day=None,
+        *,
+        excluded_schedule_id: UUID | str | None = None,
+    ) -> list[AvailabilitySlot]:
+        del excluded_schedule_id
+        if day is None:
+            return []
+
+        day_value = day if not isinstance(day, datetime) else day.date()
+        return [
+            AvailabilitySlot(
+                id=f"{uuid4()}:{day_value.isoformat()}",
+                adviser_id=UUID(str(adviser_id)),
+                slot_start=datetime(
+                    day_value.year,
+                    day_value.month,
+                    day_value.day,
+                    14,
+                    0,
+                    tzinfo=UTC,
+                ),
+                slot_end=datetime(
+                    day_value.year,
+                    day_value.month,
+                    day_value.day,
+                    15,
+                    0,
+                    tzinfo=UTC,
+                ),
+                is_blocked=False,
+                source_rule_id=uuid4(),
+            )
+        ]
 
 
 class _FakeNotificationRepository:

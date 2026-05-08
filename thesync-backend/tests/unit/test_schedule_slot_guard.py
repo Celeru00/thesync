@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time
 from uuid import UUID, uuid4
 
-from model.availability import AvailabilitySlot
-from model.base import PaginatedResult
-from model.schedule import Schedule, ScheduleListFilters
+from model.availability import AvailabilityRule, AvailabilitySlot
 from usecase.schedule_slot_guard import (
     SLOT_BLOCKED_REASON,
     SLOT_UNAVAILABLE_REASON,
@@ -16,160 +14,123 @@ from usecase.schedules import ScheduleConflictError
 
 
 class _FakeAvailabilityRepository:
-    def __init__(self, slots: list[AvailabilitySlot]) -> None:
-        self._slots = slots
-
-    def list_by_adviser(self, adviser_id: UUID | str) -> list[AvailabilitySlot]:
-        adviser_id_as_str = str(adviser_id)
-        return [slot for slot in self._slots if str(slot.adviser_id) == adviser_id_as_str]
-
-
-class _FakeScheduleRepository:
-    def __init__(self, schedules: list[Schedule], *, approved_status_id: int = 2) -> None:
-        self._schedules = schedules
-        self._approved_status_id = approved_status_id
-
-    def get_status_id_by_name(self, status_name: str) -> int | None:
-        if status_name == "approved":
-            return self._approved_status_id
-
-        return None
-
-    def list_by_adviser(
-        self,
-        adviser_id: UUID | str,
-        filters: ScheduleListFilters,
-    ) -> PaginatedResult[Schedule]:
-        adviser_id_as_str = str(adviser_id)
-        items: list[Schedule] = []
-        for schedule in self._schedules:
-            if str(schedule.adviser_id) != adviser_id_as_str:
-                continue
-            if filters.status_id is not None and schedule.status_id != filters.status_id:
-                continue
-            if schedule.scheduled_at is None:
-                continue
-            if filters.from_date is not None and schedule.scheduled_at < filters.from_date:
-                continue
-            if filters.to_date is not None and schedule.scheduled_at > filters.to_date:
-                continue
-            items.append(schedule)
-
-        return PaginatedResult[Schedule](
-            items=items,
-            total=len(items),
-            page=filters.page,
-            page_size=filters.limit,
-        )
-
-    def adviser_has_schedule_conflict(
+    def __init__(
         self,
         *,
-        adviser_id: UUID | str,
-        scheduled_at: datetime,
-        excluded_schedule_id: UUID | str | None = None,
-        status_ids: list[int] | None = None,
-    ) -> bool:
+        rules: list[AvailabilityRule],
+        free_slots: list[AvailabilitySlot],
+    ) -> None:
+        self._rules = rules
+        self._free_slots = free_slots
+
+    def list_by_adviser(self, adviser_id: UUID | str) -> list[AvailabilityRule]:
         adviser_id_as_str = str(adviser_id)
-        excluded_schedule_id_as_str = str(excluded_schedule_id) if excluded_schedule_id else None
-        allowed_status_ids = set(status_ids or [])
-        for schedule in self._schedules:
-            if str(schedule.adviser_id) != adviser_id_as_str:
-                continue
-            if (
-                excluded_schedule_id_as_str is not None
-                and str(schedule.id) == excluded_schedule_id_as_str
-            ):
-                continue
-            if schedule.scheduled_at != scheduled_at:
-                continue
-            if allowed_status_ids and schedule.status_id not in allowed_status_ids:
-                continue
-            return True
+        return [rule for rule in self._rules if str(rule.adviser_id) == adviser_id_as_str]
 
-        return False
+    def get_free_slots(
+        self,
+        adviser_id: UUID | str,
+        day: date | datetime | None = None,
+        *,
+        excluded_schedule_id: UUID | str | None = None,
+    ) -> list[AvailabilitySlot]:
+        del excluded_schedule_id
+        adviser_id_as_str = str(adviser_id)
+        if day is None:
+            return [slot for slot in self._free_slots if str(slot.adviser_id) == adviser_id_as_str]
+
+        target_day = day if isinstance(day, date) and not isinstance(day, datetime) else day.date()
+        return [
+            slot
+            for slot in self._free_slots
+            if str(slot.adviser_id) == adviser_id_as_str
+            and slot.slot_start.astimezone(UTC).date() == target_day
+        ]
 
 
-def _build_slot(
+class _UnusedScheduleRepository:
+    pass
+
+
+def _build_rule(
     *,
     adviser_id: UUID,
-    slot_start: datetime,
-    slot_end: datetime,
+    day_of_week: int,
+    start_time_value: time,
+    end_time_value: time,
     is_blocked: bool,
-) -> AvailabilitySlot:
-    return AvailabilitySlot(
+) -> AvailabilityRule:
+    return AvailabilityRule(
         id=uuid4(),
         adviser_id=adviser_id,
-        slot_start=slot_start,
-        slot_end=slot_end,
+        day_of_week=day_of_week,
+        start_time=start_time_value,
+        end_time=end_time_value,
         is_blocked=is_blocked,
     )
 
 
-def _build_schedule(
+def _build_free_slot(
     *,
     adviser_id: UUID,
-    scheduled_at: datetime,
-    status_id: int = 2,
-) -> Schedule:
-    return Schedule(
-        id=uuid4(),
-        student_id=uuid4(),
+    slot_start: datetime,
+    slot_end: datetime,
+) -> AvailabilitySlot:
+    return AvailabilitySlot(
+        id=f"{uuid4()}:{slot_start.isoformat()}",
         adviser_id=adviser_id,
-        type_id=1,
-        status_id=status_id,
-        topic="Sample Topic",
-        requested_at=datetime(2026, 5, 6, 9, 0, tzinfo=UTC),
-        scheduled_at=scheduled_at,
-        created_at=datetime(2026, 5, 6, 9, 0, tzinfo=UTC),
+        slot_start=slot_start,
+        slot_end=slot_end,
+        is_blocked=False,
+        source_rule_id=uuid4(),
     )
 
 
 class ScheduleSlotGuardTests(unittest.TestCase):
-    def test_free_slot_with_back_to_back_approved_schedule_is_allowed(self) -> None:
+    def test_generated_bookable_slot_allows_booking(self) -> None:
         adviser_id = uuid4()
-        requested_at = datetime(2026, 5, 7, 9, 30, tzinfo=UTC)
-        slots = [
-            _build_slot(
-                adviser_id=adviser_id,
-                slot_start=datetime(2026, 5, 7, 9, 0, tzinfo=UTC),
-                slot_end=datetime(2026, 5, 7, 10, 0, tzinfo=UTC),
-                is_blocked=False,
-            )
-        ]
-        schedules = [
-            _build_schedule(
-                adviser_id=adviser_id,
-                scheduled_at=datetime(2026, 5, 7, 10, 0, tzinfo=UTC),
-            )
-        ]
+        requested_at = datetime(2026, 5, 11, 1, 0, tzinfo=UTC)
         guard = ScheduleSlotGuard(
-            _FakeScheduleRepository(schedules),
-            _FakeAvailabilityRepository(slots),
+            _UnusedScheduleRepository(),
+            _FakeAvailabilityRepository(
+                rules=[
+                    _build_rule(
+                        adviser_id=adviser_id,
+                        day_of_week=0,
+                        start_time_value=time(9, 0),
+                        end_time_value=time(10, 0),
+                        is_blocked=False,
+                    )
+                ],
+                free_slots=[
+                    _build_free_slot(
+                        adviser_id=adviser_id,
+                        slot_start=requested_at,
+                        slot_end=datetime(2026, 5, 11, 2, 0, tzinfo=UTC),
+                    )
+                ],
+            ),
         )
 
         guard.ensure_slot_available(adviser_id=adviser_id, scheduled_at=requested_at)
 
-    def test_conflicting_approved_schedule_raises_slot_unavailable(self) -> None:
+    def test_requested_time_that_no_longer_fits_window_is_unavailable(self) -> None:
         adviser_id = uuid4()
-        requested_at = datetime(2026, 5, 7, 9, 30, tzinfo=UTC)
-        slots = [
-            _build_slot(
-                adviser_id=adviser_id,
-                slot_start=datetime(2026, 5, 7, 9, 0, tzinfo=UTC),
-                slot_end=datetime(2026, 5, 7, 10, 0, tzinfo=UTC),
-                is_blocked=False,
-            )
-        ]
-        schedules = [
-            _build_schedule(
-                adviser_id=adviser_id,
-                scheduled_at=datetime(2026, 5, 7, 9, 45, tzinfo=UTC),
-            )
-        ]
+        requested_at = datetime(2026, 5, 11, 1, 30, tzinfo=UTC)
         guard = ScheduleSlotGuard(
-            _FakeScheduleRepository(schedules),
-            _FakeAvailabilityRepository(slots),
+            _UnusedScheduleRepository(),
+            _FakeAvailabilityRepository(
+                rules=[
+                    _build_rule(
+                        adviser_id=adviser_id,
+                        day_of_week=0,
+                        start_time_value=time(9, 0),
+                        end_time_value=time(10, 0),
+                        is_blocked=False,
+                    )
+                ],
+                free_slots=[],
+            ),
         )
 
         with self.assertRaises(ScheduleConflictError) as context:
@@ -177,20 +138,47 @@ class ScheduleSlotGuardTests(unittest.TestCase):
 
         self.assertEqual(context.exception.conflict_reason, SLOT_UNAVAILABLE_REASON)
 
-    def test_blocked_slot_raises_slot_blocked(self) -> None:
+    def test_busy_free_slot_gap_raises_slot_unavailable(self) -> None:
         adviser_id = uuid4()
-        requested_at = datetime(2026, 5, 7, 9, 30, tzinfo=UTC)
-        slots = [
-            _build_slot(
-                adviser_id=adviser_id,
-                slot_start=datetime(2026, 5, 7, 9, 0, tzinfo=UTC),
-                slot_end=datetime(2026, 5, 7, 10, 0, tzinfo=UTC),
-                is_blocked=True,
-            )
-        ]
+        requested_at = datetime(2026, 5, 11, 1, 0, tzinfo=UTC)
         guard = ScheduleSlotGuard(
-            _FakeScheduleRepository([]),
-            _FakeAvailabilityRepository(slots),
+            _UnusedScheduleRepository(),
+            _FakeAvailabilityRepository(
+                rules=[
+                    _build_rule(
+                        adviser_id=adviser_id,
+                        day_of_week=0,
+                        start_time_value=time(9, 0),
+                        end_time_value=time(10, 0),
+                        is_blocked=False,
+                    )
+                ],
+                free_slots=[],
+            ),
+        )
+
+        with self.assertRaises(ScheduleConflictError) as context:
+            guard.ensure_slot_available(adviser_id=adviser_id, scheduled_at=requested_at)
+
+        self.assertEqual(context.exception.conflict_reason, SLOT_UNAVAILABLE_REASON)
+
+    def test_blocked_rule_raises_slot_blocked(self) -> None:
+        adviser_id = uuid4()
+        requested_at = datetime(2026, 5, 11, 1, 0, tzinfo=UTC)
+        guard = ScheduleSlotGuard(
+            _UnusedScheduleRepository(),
+            _FakeAvailabilityRepository(
+                rules=[
+                    _build_rule(
+                        adviser_id=adviser_id,
+                        day_of_week=0,
+                        start_time_value=time(9, 0),
+                        end_time_value=time(10, 0),
+                        is_blocked=True,
+                    )
+                ],
+                free_slots=[],
+            ),
         )
 
         with self.assertRaises(ScheduleConflictError) as context:

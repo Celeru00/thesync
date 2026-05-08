@@ -129,7 +129,18 @@ class _FakeAvailabilityRepository:
     def __init__(self, slots: list[AvailabilitySlot]) -> None:
         self._slots = slots
 
-    def list_by_adviser(self, adviser_id: UUID | str) -> list[AvailabilitySlot]:
+    def list_by_adviser(self, adviser_id: UUID | str) -> list[object]:
+        del adviser_id
+        return []
+
+    def get_free_slots(
+        self,
+        adviser_id: UUID | str,
+        day=None,
+        *,
+        excluded_schedule_id: UUID | str | None = None,
+    ) -> list[AvailabilitySlot]:
+        del day, excluded_schedule_id
         adviser_id_as_str = str(adviser_id)
         return [slot for slot in self._slots if str(slot.adviser_id) == adviser_id_as_str]
 
@@ -258,11 +269,12 @@ class ScheduleEmailNotificationTests(unittest.TestCase):
             adviser_id=adviser_id,
         )
         availability_slot = AvailabilitySlot(
-            id=uuid4(),
+            id=f"{uuid4()}:2026-05-10T10:30:00+00:00",
             adviser_id=adviser_id,
-            slot_start=datetime(2026, 5, 10, 10, 0, tzinfo=UTC),
-            slot_end=datetime(2026, 5, 10, 11, 0, tzinfo=UTC),
+            slot_start=datetime(2026, 5, 10, 10, 30, tzinfo=UTC),
+            slot_end=datetime(2026, 5, 10, 11, 30, tzinfo=UTC),
             is_blocked=False,
+            source_rule_id=uuid4(),
         )
         email_service = _FakeEmailService()
         service = DefaultScheduleService(
@@ -302,7 +314,18 @@ class ScheduleEmailNotificationTests(unittest.TestCase):
         email_service = _FakeEmailService()
         service = DefaultScheduleStatusService(
             schedule_repository=_StatusScheduleRepository(schedule),
-            availability_repository=_FakeAvailabilityRepository([]),
+            availability_repository=_FakeAvailabilityRepository(
+                [
+                    AvailabilitySlot(
+                        id=f"{uuid4()}:{schedule.scheduled_at.isoformat()}",
+                        adviser_id=adviser.id,
+                        slot_start=schedule.scheduled_at,
+                        slot_end=datetime(2026, 5, 10, 11, 30, tzinfo=UTC),
+                        is_blocked=False,
+                        source_rule_id=None,
+                    )
+                ]
+            ),
             notification_repository=_FakeNotificationRepository(),
             audit_repository=_FakeAuditRepository(),
             calendar_service=_FakeCalendarService("https://meet.google.com/abc-defg-hij"),
@@ -359,7 +382,18 @@ class ScheduleEmailNotificationTests(unittest.TestCase):
         )
         student_reschedule_service = DefaultScheduleStatusService(
             schedule_repository=_StatusScheduleRepository(student_reschedule_schedule),
-            availability_repository=_FakeAvailabilityRepository([]),
+            availability_repository=_FakeAvailabilityRepository(
+                [
+                    AvailabilitySlot(
+                        id=f"{uuid4()}:2026-05-11T14:00:00+00:00",
+                        adviser_id=adviser.id,
+                        slot_start=datetime(2026, 5, 11, 14, 0, tzinfo=UTC),
+                        slot_end=datetime(2026, 5, 11, 15, 0, tzinfo=UTC),
+                        is_blocked=False,
+                        source_rule_id=uuid4(),
+                    )
+                ]
+            ),
             notification_repository=_FakeNotificationRepository(),
             audit_repository=_FakeAuditRepository(),
             user_repository=_FakeUserRepository(
@@ -380,7 +414,7 @@ class ScheduleEmailNotificationTests(unittest.TestCase):
             full_name="Student User",
             email="student@example.com",
         )
-        student_requested_time = datetime(2026, 5, 11, 9, 0, tzinfo=UTC)
+        student_requested_time = datetime(2026, 5, 11, 14, 0, tzinfo=UTC)
 
         student_reschedule_service.reschedule(
             student_actor,
@@ -403,7 +437,18 @@ class ScheduleEmailNotificationTests(unittest.TestCase):
         )
         reschedule_service = DefaultScheduleStatusService(
             schedule_repository=_StatusScheduleRepository(reschedule_schedule),
-            availability_repository=_FakeAvailabilityRepository([]),
+            availability_repository=_FakeAvailabilityRepository(
+                [
+                    AvailabilitySlot(
+                        id=f"{uuid4()}:2026-05-12T14:00:00+00:00",
+                        adviser_id=adviser.id,
+                        slot_start=datetime(2026, 5, 12, 14, 0, tzinfo=UTC),
+                        slot_end=datetime(2026, 5, 12, 15, 0, tzinfo=UTC),
+                        is_blocked=False,
+                        source_rule_id=uuid4(),
+                    )
+                ]
+            ),
             notification_repository=_FakeNotificationRepository(),
             audit_repository=_FakeAuditRepository(),
             user_repository=_FakeUserRepository([student]),

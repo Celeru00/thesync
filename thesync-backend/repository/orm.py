@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time
 from typing import ClassVar
 from uuid import UUID, uuid4
 
@@ -13,6 +13,7 @@ from sqlalchemy import (
     Integer,
     MetaData,
     Text,
+    Time,
     UniqueConstraint,
     Uuid,
     func,
@@ -242,15 +243,22 @@ class NotificationRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 class AvailabilitySlotRecord(UUIDPrimaryKeyMixin, Base):
     __tablename__: ClassVar[str] = "availability_slots"
     __table_args__ = (
-        CheckConstraint("slot_end > slot_start", name="ck_availability_slots_slot_end_after_start"),
+        CheckConstraint("day_of_week >= 0 AND day_of_week <= 4", name="ck_day_of_week_range"),
+        CheckConstraint("end_time > start_time", name="ck_end_time_after_start_time"),
         Index("ix_availability_slots_adviser_id", "adviser_id"),
-        Index("ix_availability_slots_slot_start", "slot_start"),
-        Index("ix_availability_slots_adviser_id_slot_start", "adviser_id", "slot_start"),
+        Index("ix_availability_slots_day_of_week", "day_of_week"),
+        Index(
+            "ix_availability_slots_adviser_id_day_of_week_start_time",
+            "adviser_id",
+            "day_of_week",
+            "start_time",
+        ),
     )
 
     adviser_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
-    slot_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    slot_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    day_of_week: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_time: Mapped[time] = mapped_column(Time, nullable=False)
+    end_time: Mapped[time] = mapped_column(Time, nullable=False)
     is_blocked: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,

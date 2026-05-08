@@ -1,20 +1,25 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Final
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
-from model.schedule import ScheduleListFilters
-from repository.availability_repository import AvailabilityRepository
+from repository.availability_repository import (
+    AvailabilityRepository,
+    AvailabilityRepositoryCalendarError,
+    AvailabilityRepositoryUnavailableError,
+)
 from repository.schedule_repository import ScheduleRepository
 from usecase.schedules import (
     ScheduleConflictError,
     ScheduleServiceUnavailableError,
 )
 
-APPROVED_STATUS_NAME: Final[str] = "approved"
 SLOT_UNAVAILABLE_REASON: Final[str] = "slot_unavailable"
 SLOT_BLOCKED_REASON: Final[str] = "slot_blocked"
+DEFAULT_SCHEDULE_DURATION: Final[timedelta] = timedelta(hours=1)
+SCHEDULE_TIMEZONE: Final[ZoneInfo] = ZoneInfo("Asia/Manila")
 
 
 def _normalize_datetime(value: datetime) -> datetime:
@@ -22,6 +27,24 @@ def _normalize_datetime(value: datetime) -> datetime:
         return value.replace(tzinfo=UTC)
 
     return value.astimezone(UTC)
+
+
+def _interval_contains(
+    interval_start: datetime,
+    interval_end: datetime,
+    requested_start: datetime,
+    requested_end: datetime,
+) -> bool:
+    return interval_start <= requested_start and requested_end <= interval_end
+
+
+def _times_overlap(
+    start_a: datetime,
+    end_a: datetime,
+    start_b: datetime,
+    end_b: datetime,
+) -> bool:
+    return start_a < end_b and end_a > start_b
 
 
 class ScheduleSlotGuard:
@@ -43,63 +66,64 @@ class ScheduleSlotGuard:
         excluded_schedule_id: UUID | None = None,
     ) -> None:
         normalized_scheduled_at = _normalize_datetime(scheduled_at)
-        approved_status_id = self._schedule_repository.get_status_id_by_name(APPROVED_STATUS_NAME)
-        if approved_status_id is None:
-            raise ScheduleServiceUnavailableError(
-                f'Required schedule status "{APPROVED_STATUS_NAME}" is missing.'
-            )
+        requested_end = normalized_scheduled_at + DEFAULT_SCHEDULE_DURATION
+        requested_local_start = normalized_scheduled_at.astimezone(SCHEDULE_TIMEZONE)
+        requested_local_end = requested_local_start + DEFAULT_SCHEDULE_DURATION
 
-        matching_unblocked_ranges: list[tuple[datetime, datetime]] = []
-        for slot in self._availability_repository.list_by_adviser(adviser_id):
+        try:
+            free_slots = self._availability_repository.get_free_slots(
+                adviser_id,
+                requested_local_start.date(),
+                excluded_schedule_id=excluded_schedule_id,
+            )
+        except (
+            AvailabilityRepositoryCalendarError,
+            AvailabilityRepositoryUnavailableError,
+        ) as exc:
+            raise ScheduleServiceUnavailableError(str(exc)) from exc
+
+        for slot in free_slots:
             slot_start = _normalize_datetime(slot.slot_start)
             slot_end = _normalize_datetime(slot.slot_end)
-            if not slot_start <= normalized_scheduled_at < slot_end:
+            if _interval_contains(slot_start, slot_end, normalized_scheduled_at, requested_end):
+                return
+
+        try:
+            matching_rules = [
+                slot
+                for slot in self._availability_repository.list_by_adviser(adviser_id)
+                if slot.day_of_week == requested_local_start.weekday()
+            ]
+        except AvailabilityRepositoryUnavailableError as exc:
+            raise ScheduleServiceUnavailableError(str(exc)) from exc
+
+        for rule in matching_rules:
+            rule_start = datetime.combine(
+                requested_local_start.date(),
+                rule.start_time,
+                tzinfo=SCHEDULE_TIMEZONE,
+            )
+            rule_end = datetime.combine(
+                requested_local_start.date(),
+                rule.end_time,
+                tzinfo=SCHEDULE_TIMEZONE,
+            )
+
+            if not _times_overlap(rule_start, rule_end, requested_local_start, requested_local_end):
                 continue
 
-            if slot.is_blocked:
+            if rule.is_blocked and _interval_contains(
+                rule_start,
+                rule_end,
+                requested_local_start,
+                requested_local_end,
+            ):
                 raise ScheduleConflictError(
                     "The requested slot is blocked.",
                     reason=SLOT_BLOCKED_REASON,
                 )
 
-            matching_unblocked_ranges.append((slot_start, slot_end))
-
-        for slot_start, slot_end in matching_unblocked_ranges:
-            schedules_page = self._schedule_repository.list_by_adviser(
-                adviser_id,
-                ScheduleListFilters(
-                    status_id=approved_status_id,
-                    from_date=slot_start,
-                    to_date=slot_end,
-                    page=1,
-                    limit=1000,
-                ),
-            )
-            for schedule in schedules_page.items:
-                if excluded_schedule_id is not None and schedule.id == excluded_schedule_id:
-                    continue
-
-                if schedule.scheduled_at is None:
-                    continue
-
-                existing_scheduled_at = _normalize_datetime(schedule.scheduled_at)
-                if slot_start <= existing_scheduled_at < slot_end:
-                    raise ScheduleConflictError(
-                        "The requested slot is already unavailable.",
-                        reason=SLOT_UNAVAILABLE_REASON,
-                    )
-
-        if matching_unblocked_ranges:
-            return
-
-        has_exact_conflict = self._schedule_repository.adviser_has_schedule_conflict(
-            adviser_id=adviser_id,
-            scheduled_at=normalized_scheduled_at,
-            excluded_schedule_id=excluded_schedule_id,
-            status_ids=[approved_status_id],
+        raise ScheduleConflictError(
+            "The requested slot is already unavailable.",
+            reason=SLOT_UNAVAILABLE_REASON,
         )
-        if has_exact_conflict:
-            raise ScheduleConflictError(
-                "The requested slot is already unavailable.",
-                reason=SLOT_UNAVAILABLE_REASON,
-            )

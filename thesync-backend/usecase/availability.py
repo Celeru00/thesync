@@ -6,6 +6,7 @@ from uuid import UUID
 
 from model.auth import AuthenticatedUser
 from model.availability import (
+    AvailabilityRule,
     AvailabilitySlot,
     AvailabilitySlotBlockedUpdateRequest,
     AvailabilitySlotCreateRequest,
@@ -43,9 +44,9 @@ class AvailabilityService(Protocol):
         self,
         current_user: AuthenticatedUser,
         payload: AvailabilitySlotCreateRequest,
-    ) -> AvailabilitySlot: ...
+    ) -> AvailabilityRule: ...
 
-    def list_slots(self, current_user: AuthenticatedUser) -> list[AvailabilitySlot]: ...
+    def list_slots(self, current_user: AuthenticatedUser) -> list[AvailabilityRule]: ...
 
     def get_free_slots(
         self,
@@ -59,6 +60,6 @@ class AvailabilityService(Protocol):
         current_user: AuthenticatedUser,
         slot_id: UUID,
         payload: AvailabilitySlotBlockedUpdateRequest,
-    ) -> AvailabilitySlot: ...
+    ) -> AvailabilityRule: ...
 
     def delete_slot(self, current_user: AuthenticatedUser, slot_id: UUID) -> None: ...

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import time
 from uuid import UUID
 
 from sqlalchemy import select
@@ -13,14 +13,17 @@ def create_availability_slot(
     session: Session,
     *,
     adviser_id: UUID,
-    slot_start: datetime,
-    slot_end: datetime,
+    day_of_week: int,
+    start_time: time,
+    end_time: time,
+    is_blocked: bool = False,
 ) -> AvailabilitySlotRecord:
     slot = AvailabilitySlotRecord(
         adviser_id=adviser_id,
-        slot_start=slot_start,
-        slot_end=slot_end,
-        is_blocked=False,
+        day_of_week=day_of_week,
+        start_time=start_time,
+        end_time=end_time,
+        is_blocked=is_blocked,
     )
 
     session.add(slot)
@@ -38,7 +41,7 @@ def list_availability_slots(
     statement = (
         select(AvailabilitySlotRecord)
         .where(AvailabilitySlotRecord.adviser_id == adviser_id)
-        .order_by(AvailabilitySlotRecord.slot_start)
+        .order_by(AvailabilitySlotRecord.day_of_week, AvailabilitySlotRecord.start_time)
     )
 
     return list(session.execute(statement).scalars().all())
