@@ -69,21 +69,32 @@ export type RescheduleScheduleRequest = {
   remarks?: string;
 };
 
-export type AvailabilitySlot = {
+export type AvailabilityRule = {
   id: UUID;
+  adviser_id: UUID;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  is_blocked: boolean;
+};
+
+export type AvailabilitySlot = {
+  id: string;
   adviser_id: UUID;
   slot_start: ISODateTimeString;
   slot_end: ISODateTimeString;
   is_blocked: boolean;
+  source_rule_id?: UUID | null;
 };
 
-export type CreateAvailabilitySlotRequest = {
-  slot_start: ISODateTimeString;
-  slot_end: ISODateTimeString;
+export type CreateAvailabilityRuleRequest = {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
   is_blocked?: boolean;
 };
 
-export type UpdateAvailabilitySlotBlockedRequest = {
+export type UpdateAvailabilityRuleBlockedRequest = {
   is_blocked: boolean;
 };
 
@@ -425,18 +436,18 @@ export async function rescheduleSchedule(
 }
 
 export async function createSlot(
-  data: CreateAvailabilitySlotRequest,
-): Promise<AvailabilitySlot> {
-  const response = await axiosInstance.post<AvailabilitySlot>(
+  data: CreateAvailabilityRuleRequest,
+): Promise<AvailabilityRule> {
+  const response = await axiosInstance.post<AvailabilityRule>(
     "/api/availability",
     data,
   );
   return response.data;
 }
 
-export async function listMySlots(): Promise<AvailabilitySlot[]> {
+export async function listMySlots(): Promise<AvailabilityRule[]> {
   const response =
-    await axiosInstance.get<AvailabilitySlot[]>("/api/availability");
+    await axiosInstance.get<AvailabilityRule[]>("/api/availability");
   return response.data;
 }
 
@@ -452,12 +463,63 @@ export async function getFreeSlots(
   return response.data;
 }
 
+function getAvailabilitySlotKey(
+  slot: Pick<AvailabilitySlot, "slot_start" | "slot_end">,
+): string {
+  return `${slot.slot_start}|${slot.slot_end}`;
+}
+
+export async function getCommonFreeSlots(
+  adviserIds: string[],
+  date?: string,
+): Promise<AvailabilitySlot[]> {
+  const normalizedAdviserIds = Array.from(
+    new Set(adviserIds.map((adviserId) => adviserId.trim()).filter(Boolean)),
+  );
+
+  if (normalizedAdviserIds.length === 0 || !date) {
+    return [];
+  }
+
+  const slotLists = await Promise.all(
+    normalizedAdviserIds.map((adviserId) => getFreeSlots(adviserId, date)),
+  );
+
+  if (slotLists.length === 1) {
+    return slotLists[0];
+  }
+
+  let sharedSlotKeys = new Set(
+    slotLists[0].map((slot) => getAvailabilitySlotKey(slot)),
+  );
+
+  for (const slotList of slotLists.slice(1)) {
+    const nextSlotKeys = new Set(
+      slotList.map((slot) => getAvailabilitySlotKey(slot)),
+    );
+    sharedSlotKeys = new Set(
+      [...sharedSlotKeys].filter((slotKey) => nextSlotKeys.has(slotKey)),
+    );
+
+    if (sharedSlotKeys.size === 0) {
+      return [];
+    }
+  }
+
+  return slotLists[0]
+    .filter((slot) => sharedSlotKeys.has(getAvailabilitySlotKey(slot)))
+    .map((slot) => ({
+      ...slot,
+      id: `shared:${slot.slot_start}:${slot.slot_end}`,
+    }));
+}
+
 export async function toggleSlotBlocked(
   id: string,
   is_blocked: boolean,
-): Promise<AvailabilitySlot> {
-  const payload: UpdateAvailabilitySlotBlockedRequest = { is_blocked };
-  const response = await axiosInstance.patch<AvailabilitySlot>(
+): Promise<AvailabilityRule> {
+  const payload: UpdateAvailabilityRuleBlockedRequest = { is_blocked };
+  const response = await axiosInstance.patch<AvailabilityRule>(
     `/api/availability/${id}`,
     payload,
   );

@@ -32,40 +32,38 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
+import type { AvailabilityRule } from "@/lib/api";
 import {
   createSlot,
   deleteSlot,
   listMySlots,
   toggleSlotBlocked,
-  type AvailabilitySlot,
 } from "@/lib/api";
-
-type WeekDay = {
-  label: string;
-  date: Date;
-  dateKey: string;
-};
+import { cn } from "@/lib/utils";
 
 type CreateFormState = {
-  date: string;
+  dayOfWeek: string;
   start: string;
   end: string;
+  isBlocked: boolean;
 };
 
-const weekDayLabels = [
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-];
+const weekdayOptions = [
+  { value: 0, label: "Monday" },
+  { value: 1, label: "Tuesday" },
+  { value: 2, label: "Wednesday" },
+  { value: 3, label: "Thursday" },
+  { value: 4, label: "Friday" },
+] as const;
+const weekdayLabelByValue = new Map<number, string>(
+  weekdayOptions.map((option) => [option.value, option.label]),
+);
 
 const initialCreateForm: CreateFormState = {
-  date: "",
+  dayOfWeek: "0",
   start: "09:00",
   end: "10:00",
+  isBlocked: false,
 };
 
 function getErrorMessage(error: unknown) {
@@ -102,71 +100,37 @@ function getErrorMessage(error: unknown) {
   return "Something went wrong. Please try again.";
 }
 
-function toDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
+function normalizeTimeValue(value: string) {
+  return value.slice(0, 5);
 }
 
-function getWeekDays(referenceDate = new Date()): WeekDay[] {
-  const start = new Date(referenceDate);
-  const day = start.getDay();
-  const daysSinceMonday = day === 0 ? 6 : day - 1;
-
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - daysSinceMonday);
-
-  return weekDayLabels.map((label, index) => {
-    const date = new Date(start);
-    date.setDate(start.getDate() + index);
-
-    return {
-      label,
-      date,
-      dateKey: toDateKey(date),
-    };
-  });
-}
-
-function getSlotDate(slot: AvailabilitySlot) {
-  return new Date(slot.slot_start);
-}
-
-function getSlotDateKey(slot: AvailabilitySlot) {
-  return toDateKey(getSlotDate(slot));
-}
-
-function getMinutes(time: string) {
-  const [hours, minutes] = time.split(":").map(Number);
-
+function getMinutes(timeValue: string) {
+  const [hours, minutes] = normalizeTimeValue(timeValue).split(":").map(Number);
   return hours * 60 + minutes;
+}
+
+function isThirtyMinuteAligned(timeValue: string) {
+  return getMinutes(timeValue) % 30 === 0;
 }
 
 function getDurationMinutes(start: string, end: string) {
   return Math.max(getMinutes(end) - getMinutes(start), 0);
 }
 
-function getSlotDurationMinutes(slot: AvailabilitySlot) {
-  const start = new Date(slot.slot_start).getTime();
-  const end = new Date(slot.slot_end).getTime();
-
-  return Math.max(Math.round((end - start) / 60_000), 0);
+function getRuleDurationMinutes(rule: AvailabilityRule) {
+  return getDurationMinutes(rule.start_time, rule.end_time);
 }
 
-function formatTimeFromDateTime(value: string) {
+function formatTimeValue(value: string) {
+  const [hours, minutes] = normalizeTimeValue(value).split(":").map(Number);
   return new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
-  }).format(new Date(value));
+  }).format(new Date(2026, 0, 5, hours, minutes, 0, 0));
 }
 
-function formatDateLabel(date: Date) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-  }).format(date);
+function formatTimeRange(start: string, end: string) {
+  return `${formatTimeValue(start)} - ${formatTimeValue(end)}`;
 }
 
 function formatDuration(minutes: number) {
@@ -188,29 +152,49 @@ function formatDuration(minutes: number) {
   return `${hours} hr ${remainingMinutes} min`;
 }
 
-function buildSlotDateTime(date: string, time: string) {
-  return new Date(`${date}T${time}:00`).toISOString();
+function sortRules(rules: AvailabilityRule[]) {
+  return [...rules].sort((left, right) => {
+    if (left.day_of_week !== right.day_of_week) {
+      return left.day_of_week - right.day_of_week;
+    }
+
+    return getMinutes(left.start_time) - getMinutes(right.start_time);
+  });
 }
 
-function sortSlots(slots: AvailabilitySlot[]) {
-  return [...slots].sort(
-    (first, second) =>
-      new Date(first.slot_start).getTime() -
-      new Date(second.slot_start).getTime(),
-  );
+function isWeekdayRule(rule: AvailabilityRule) {
+  return weekdayLabelByValue.has(rule.day_of_week);
+}
+
+function getWeekdayLabel(dayOfWeek: number) {
+  return weekdayLabelByValue.get(dayOfWeek) ?? "Weekday";
+}
+
+function getCreateValidationMessage(form: CreateFormState) {
+  if (!isThirtyMinuteAligned(form.start) || !isThirtyMinuteAligned(form.end)) {
+    return "Times must use 30-minute increments.";
+  }
+
+  const durationMinutes = getDurationMinutes(form.start, form.end);
+  if (durationMinutes === 0) {
+    return "End time must be later than start time.";
+  }
+
+  if (!form.isBlocked && durationMinutes < 60) {
+    return "Open availability must be at least 1 hour long.";
+  }
+
+  return null;
 }
 
 export default function AdviserAvailabilityPage() {
-  const weekDays = useMemo(() => getWeekDays(), []);
-  const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
+  const [rules, setRules] = useState<AvailabilityRule[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [createForm, setCreateForm] = useState<CreateFormState>(() => ({
-    ...initialCreateForm,
-    date: weekDays[0]?.dateKey ?? "",
-  }));
+  const [createForm, setCreateForm] =
+    useState<CreateFormState>(initialCreateForm);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [pendingToggleIds, setPendingToggleIds] = useState<Set<string>>(
@@ -223,14 +207,14 @@ export default function AdviserAvailabilityPage() {
   useEffect(() => {
     let isMounted = true;
 
-    async function loadSlots() {
+    async function loadRules() {
       setIsLoading(true);
       setLoadError(null);
 
       try {
-        const nextSlots = await listMySlots();
+        const nextRules = await listMySlots();
         if (isMounted) {
-          setSlots(sortSlots(nextSlots));
+          setRules(sortRules(nextRules.filter(isWeekdayRule)));
         }
       } catch (error) {
         if (isMounted) {
@@ -243,60 +227,63 @@ export default function AdviserAvailabilityPage() {
       }
     }
 
-    loadSlots();
+    loadRules();
 
     return () => {
       isMounted = false;
     };
   }, []);
 
-  const slotsByDay = weekDays.map((day) => {
-    const daySlots = slots.filter(
-      (slot) => getSlotDateKey(slot) === day.dateKey,
-    );
+  const rulesByDay = useMemo(
+    () =>
+      weekdayOptions.map(({ label, value }) => {
+        const dayRules = rules.filter((rule) => rule.day_of_week === value);
+        return {
+          dayIndex: value,
+          label,
+          rules: dayRules,
+          available: dayRules.filter((rule) => !rule.is_blocked),
+          blocked: dayRules.filter((rule) => rule.is_blocked),
+        };
+      }),
+    [rules],
+  );
 
-    return {
-      ...day,
-      available: daySlots.filter((slot) => !slot.is_blocked),
-      blocked: daySlots.filter((slot) => slot.is_blocked),
-    };
-  });
-
-  const activeSlots = slots.filter((slot) => !slot.is_blocked);
-  const blockedSlots = slots.filter((slot) => slot.is_blocked);
-  const totalMinutes = activeSlots.reduce(
-    (total, slot) => total + getSlotDurationMinutes(slot),
+  const availableRules = rules.filter((rule) => !rule.is_blocked);
+  const blockedRules = rules.filter((rule) => rule.is_blocked);
+  const totalAvailableMinutes = availableRules.reduce(
+    (total, rule) => total + getRuleDurationMinutes(rule),
     0,
   );
   const createDurationMinutes = getDurationMinutes(
     createForm.start,
     createForm.end,
   );
-  const isCreateFormInvalid = createDurationMinutes === 0;
+  const createValidationMessage = getCreateValidationMessage(createForm);
+  const isCreateFormInvalid = createValidationMessage !== null;
 
-  function openCreateForm(dateKey: string) {
+  function openCreateForm(dayOfWeek = "0") {
     setCreateForm({
-      date: dateKey,
-      start: "09:00",
-      end: "10:00",
+      ...initialCreateForm,
+      dayOfWeek,
     });
     setCreateError(null);
     setIsCreateOpen(true);
   }
 
-  function replaceSlot(updatedSlot: AvailabilitySlot) {
-    setSlots((currentSlots) =>
-      sortSlots(
-        currentSlots.map((slot) =>
-          slot.id === updatedSlot.id ? updatedSlot : slot,
+  function replaceRule(updatedRule: AvailabilityRule) {
+    setRules((currentRules) =>
+      sortRules(
+        currentRules.map((rule) =>
+          rule.id === updatedRule.id ? updatedRule : rule,
         ),
       ),
     );
   }
 
-  async function handleCreateSlot() {
-    if (isCreateFormInvalid) {
-      setCreateError("End time must be later than start time.");
+  async function handleCreateRule() {
+    if (createValidationMessage) {
+      setCreateError(createValidationMessage);
       return;
     }
 
@@ -305,11 +292,13 @@ export default function AdviserAvailabilityPage() {
     setActionError(null);
 
     try {
-      const createdSlot = await createSlot({
-        slot_start: buildSlotDateTime(createForm.date, createForm.start),
-        slot_end: buildSlotDateTime(createForm.date, createForm.end),
+      const createdRule = await createSlot({
+        day_of_week: Number(createForm.dayOfWeek),
+        start_time: createForm.start,
+        end_time: createForm.end,
+        is_blocked: createForm.isBlocked,
       });
-      setSlots((currentSlots) => sortSlots([...currentSlots, createdSlot]));
+      setRules((currentRules) => sortRules([...currentRules, createdRule]));
       setIsCreateOpen(false);
     } catch (error) {
       setCreateError(getErrorMessage(error));
@@ -319,49 +308,49 @@ export default function AdviserAvailabilityPage() {
   }
 
   async function handleToggleBlocked(
-    slot: AvailabilitySlot,
+    rule: AvailabilityRule,
     isBlocked: boolean,
   ) {
-    setPendingToggleIds((currentIds) => new Set(currentIds).add(slot.id));
+    setPendingToggleIds((currentIds) => new Set(currentIds).add(rule.id));
     setActionError(null);
 
     try {
-      const updatedSlot = await toggleSlotBlocked(slot.id, isBlocked);
-      replaceSlot(updatedSlot);
+      const updatedRule = await toggleSlotBlocked(rule.id, isBlocked);
+      replaceRule(updatedRule);
     } catch (error) {
       setActionError(getErrorMessage(error));
     } finally {
       setPendingToggleIds((currentIds) => {
         const nextIds = new Set(currentIds);
-        nextIds.delete(slot.id);
+        nextIds.delete(rule.id);
         return nextIds;
       });
     }
   }
 
-  async function handleDeleteSlot(slot: AvailabilitySlot) {
+  async function handleDeleteRule(rule: AvailabilityRule) {
     const confirmed = window.confirm(
-      "Delete this availability slot? This cannot be undone.",
+      "Delete this recurring availability rule? This cannot be undone.",
     );
 
     if (!confirmed) {
       return;
     }
 
-    setPendingDeleteIds((currentIds) => new Set(currentIds).add(slot.id));
+    setPendingDeleteIds((currentIds) => new Set(currentIds).add(rule.id));
     setActionError(null);
 
     try {
-      await deleteSlot(slot.id);
-      setSlots((currentSlots) =>
-        currentSlots.filter((currentSlot) => currentSlot.id !== slot.id),
+      await deleteSlot(rule.id);
+      setRules((currentRules) =>
+        currentRules.filter((currentRule) => currentRule.id !== rule.id),
       );
     } catch (error) {
       setActionError(getErrorMessage(error));
     } finally {
       setPendingDeleteIds((currentIds) => {
         const nextIds = new Set(currentIds);
-        nextIds.delete(slot.id);
+        nextIds.delete(rule.id);
         return nextIds;
       });
     }
@@ -372,7 +361,11 @@ export default function AdviserAvailabilityPage() {
       <header className="space-y-2">
         <h1 className="text-heading">Availability Settings</h1>
         <p className="text-body text-content-muted">
-          Manage your consultation availability and unavailable time blocks
+          Create recurring weekly availability and blocked windows. Student
+          booking automatically excludes Google Calendar conflicts before a slot
+          can be scheduled. If a weekday has no open recurring rules, student
+          booking falls back to your standard weekday consultation hours
+          filtered by Google Calendar and existing bookings.
         </p>
       </header>
 
@@ -384,7 +377,7 @@ export default function AdviserAvailabilityPage() {
             setIsLoading(true);
             setLoadError(null);
             try {
-              setSlots(sortSlots(await listMySlots()));
+              setRules(sortRules((await listMySlots()).filter(isWeekdayRule)));
             } catch (error) {
               setLoadError(getErrorMessage(error));
             } finally {
@@ -403,9 +396,9 @@ export default function AdviserAvailabilityPage() {
               <div className="flex items-start gap-3">
                 <CalendarDays className="mt-1 size-5 shrink-0 text-content-strong" />
                 <div>
-                  <CardTitle>Weekly Availability Grid</CardTitle>
+                  <CardTitle>Recurring Weekly Rules</CardTitle>
                   <CardDescription className="text-base">
-                    Review available and blocked slots across the week
+                    Each rule repeats every week on the selected day.
                   </CardDescription>
                 </div>
               </div>
@@ -414,24 +407,24 @@ export default function AdviserAvailabilityPage() {
             <CardContent className="px-6">
               {isLoading ? (
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {weekDays.map((day) => (
-                    <Skeleton key={day.dateKey} className="h-44 rounded-lg" />
+                  {weekdayOptions.map(({ label }) => (
+                    <Skeleton key={label} className="h-44 rounded-lg" />
                   ))}
                 </div>
               ) : (
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {slotsByDay.map((dayGroup) => (
+                  {rulesByDay.map((dayGroup) => (
                     <button
-                      key={dayGroup.dateKey}
+                      key={dayGroup.label}
                       type="button"
-                      onClick={() => openCreateForm(dayGroup.dateKey)}
+                      onClick={() => openCreateForm(String(dayGroup.dayIndex))}
                       className="min-h-44 rounded-lg border border-surface bg-surface-muted-soft p-4 text-left transition-colors hover:border-brand-subtle hover:bg-surface-card focus:outline-none focus:ring-4 focus:ring-focus"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <h2 className="text-label">{dayGroup.label}</h2>
                           <p className="text-xs text-content-muted">
-                            {formatDateLabel(dayGroup.date)}
+                            Repeats every {dayGroup.label.toLowerCase()}
                           </p>
                         </div>
                         <Badge variant="outline" className="h-6 px-2">
@@ -440,24 +433,19 @@ export default function AdviserAvailabilityPage() {
                       </div>
 
                       <div className="mt-3 space-y-2">
-                        {dayGroup.available.map((slot) => (
-                          <SlotPill key={slot.id} slot={slot} />
+                        {dayGroup.rules.map((rule) => (
+                          <RulePill key={rule.id} rule={rule} />
                         ))}
 
-                        {dayGroup.blocked.map((slot) => (
-                          <SlotPill key={slot.id} slot={slot} />
-                        ))}
-
-                        {dayGroup.available.length === 0 &&
-                        dayGroup.blocked.length === 0 ? (
+                        {dayGroup.rules.length === 0 ? (
                           <div className="rounded-md border border-dashed border-control px-3 py-6 text-center text-body-sm text-content-muted">
                             <Plus className="mx-auto mb-2 size-4" />
-                            Add slot
+                            Add recurring rule
                           </div>
                         ) : (
                           <div className="flex items-center gap-1 pt-1 text-xs text-content-muted">
                             <Plus className="size-3" />
-                            <span>Add slot</span>
+                            <span>Add rule</span>
                           </div>
                         )}
                       </div>
@@ -473,9 +461,9 @@ export default function AdviserAvailabilityPage() {
               <div className="flex items-start gap-3">
                 <Clock3 className="mt-1 size-5 shrink-0 text-content-strong" />
                 <div>
-                  <CardTitle>Availability Slots</CardTitle>
+                  <CardTitle>Rule Manager</CardTitle>
                   <CardDescription className="text-base">
-                    Toggle blocked windows or delete slots
+                    Toggle blocked windows or delete recurring rules.
                   </CardDescription>
                 </div>
               </div>
@@ -483,22 +471,24 @@ export default function AdviserAvailabilityPage() {
 
             <CardContent className="space-y-4 px-6">
               {isLoading ? (
-                <SlotListSkeleton />
-              ) : slots.length > 0 ? (
-                slots.map((slot) => (
-                  <SlotManagerRow
-                    key={slot.id}
-                    slot={slot}
-                    isToggling={pendingToggleIds.has(slot.id)}
-                    isDeleting={pendingDeleteIds.has(slot.id)}
+                <RuleListSkeleton />
+              ) : rules.length > 0 ? (
+                rules.map((rule) => (
+                  <RuleManagerRow
+                    key={rule.id}
+                    rule={rule}
+                    isToggling={pendingToggleIds.has(rule.id)}
+                    isDeleting={pendingDeleteIds.has(rule.id)}
                     onToggle={handleToggleBlocked}
-                    onDelete={handleDeleteSlot}
+                    onDelete={handleDeleteRule}
                   />
                 ))
               ) : (
                 <p className="rounded-lg border border-dashed border-control px-4 py-8 text-center text-body-sm text-content-muted">
-                  No availability slots yet. Click a day on the weekly grid to
-                  create one.
+                  No recurring rules yet. Students will fall back to your
+                  standard weekday consultation hours filtered by Google
+                  Calendar. Add recurring rules above if you want tighter
+                  control.
                 </p>
               )}
             </CardContent>
@@ -511,17 +501,14 @@ export default function AdviserAvailabilityPage() {
               <CardTitle>Quick Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-5 px-6">
+              <SummaryMetric label="Recurring Rules" value={rules.length} />
               <SummaryMetric
-                label="Active Time Slots"
-                value={activeSlots.length}
+                label="Open Hours/Week"
+                value={`~${formatDuration(totalAvailableMinutes)}`}
               />
               <SummaryMetric
-                label="Total Hours/Week"
-                value={`~${formatDuration(totalMinutes)}`}
-              />
-              <SummaryMetric
-                label="Blocked Slots"
-                value={blockedSlots.length}
+                label="Blocked Rules"
+                value={blockedRules.length}
                 className="text-content-muted"
               />
             </CardContent>
@@ -531,23 +518,23 @@ export default function AdviserAvailabilityPage() {
             <CardHeader className="px-6">
               <div className="flex items-center gap-3">
                 <CalendarDays className="size-5" />
-                <CardTitle className="text-blue-900">Preview</CardTitle>
+                <CardTitle className="text-blue-900">Weekly Preview</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="space-y-4 px-6">
               <p className="text-body-sm font-medium text-blue-800">
-                Your availability this week:
+                Your recurring weekly setup:
               </p>
               <div className="space-y-2 text-body-sm text-blue-800">
-                {slotsByDay.map((dayGroup) => (
+                {rulesByDay.map((dayGroup) => (
                   <div
-                    key={dayGroup.dateKey}
+                    key={dayGroup.label}
                     className="flex items-center justify-between gap-4"
                   >
                     <span>{dayGroup.label}:</span>
                     <span className="font-medium">
                       {dayGroup.available.length > 0
-                        ? `${dayGroup.available.length} slot(s)`
+                        ? `${dayGroup.available.length} open rule(s)`
                         : "Unavailable"}
                     </span>
                   </div>
@@ -561,18 +548,21 @@ export default function AdviserAvailabilityPage() {
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <DialogContent showClose={!isCreating}>
           <DialogHeader>
-            <DialogTitle>Create Availability Slot</DialogTitle>
+            <DialogTitle>Create Recurring Rule</DialogTitle>
             <DialogDescription>
-              Add a consultation window for the selected day.
+              Add a weekly availability or blocked window for a specific day.
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-4">
             <div className="space-y-1">
-              <Label htmlFor="create-slot-day">Day</Label>
+              <Label htmlFor="create-slot-day">Weekday</Label>
               <Select
-                value={createForm.date}
-                onValueChange={(dateValue) =>
-                  setCreateForm((current) => ({ ...current, date: dateValue }))
+                value={createForm.dayOfWeek}
+                onValueChange={(dayValue) =>
+                  setCreateForm((current) => ({
+                    ...current,
+                    dayOfWeek: dayValue,
+                  }))
                 }
                 disabled={isCreating}
               >
@@ -580,9 +570,9 @@ export default function AdviserAvailabilityPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {weekDays.map((day) => (
-                    <SelectItem key={day.dateKey} value={day.dateKey}>
-                      {day.label} - {formatDateLabel(day.date)}
+                  {weekdayOptions.map((option) => (
+                    <SelectItem key={option.value} value={String(option.value)}>
+                      {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -595,7 +585,7 @@ export default function AdviserAvailabilityPage() {
                 <Input
                   id="create-slot-start"
                   type="time"
-                  step="300"
+                  step="1800"
                   value={createForm.start}
                   disabled={isCreating}
                   onChange={(event) =>
@@ -611,7 +601,7 @@ export default function AdviserAvailabilityPage() {
                 <Input
                   id="create-slot-end"
                   type="time"
-                  step="300"
+                  step="1800"
                   value={createForm.end}
                   aria-invalid={isCreateFormInvalid}
                   disabled={isCreating}
@@ -625,13 +615,34 @@ export default function AdviserAvailabilityPage() {
               </div>
             </div>
 
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-surface px-4 py-3">
+              <div>
+                <p className="text-body font-medium text-content-strong">
+                  Create as blocked time
+                </p>
+                <p className="text-body-sm text-content-muted">
+                  Block this weekly window instead of offering it to students.
+                </p>
+              </div>
+              <Switch
+                checked={createForm.isBlocked}
+                disabled={isCreating}
+                onCheckedChange={(checked) =>
+                  setCreateForm((current) => ({
+                    ...current,
+                    isBlocked: checked,
+                  }))
+                }
+              />
+            </div>
+
             <p
               className={cn(
                 "text-xs",
-                isCreateFormInvalid ? "text-red-600" : "text-content-muted",
+                createValidationMessage ? "text-red-600" : "text-content-muted",
               )}
             >
-              {formatDuration(createDurationMinutes)}
+              {createValidationMessage ?? formatDuration(createDurationMinutes)}
             </p>
 
             {createError ? <InlineError message={createError} /> : null}
@@ -648,7 +659,7 @@ export default function AdviserAvailabilityPage() {
             <Button
               type="button"
               disabled={isCreating || isCreateFormInvalid}
-              onClick={handleCreateSlot}
+              onClick={handleCreateRule}
             >
               {isCreating ? (
                 <LoaderCircle
@@ -658,7 +669,7 @@ export default function AdviserAvailabilityPage() {
               ) : (
                 <Plus data-icon="inline-start" className="size-4" />
               )}
-              {isCreating ? "Saving..." : "Save Slot"}
+              {isCreating ? "Saving..." : "Save Rule"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -667,41 +678,40 @@ export default function AdviserAvailabilityPage() {
   );
 }
 
-function SlotPill({ slot }: { slot: AvailabilitySlot }) {
+function RulePill({ rule }: { rule: AvailabilityRule }) {
   return (
     <div
       className={cn(
         "rounded-md border px-3 py-2 text-body-sm",
-        slot.is_blocked
+        rule.is_blocked
           ? "border-slate-300 bg-[repeating-linear-gradient(135deg,#f1f5f9_0,#f1f5f9_6px,#e2e8f0_6px,#e2e8f0_12px)] text-slate-700"
           : "border-emerald-200 bg-emerald-50 text-emerald-800",
       )}
     >
       <div className="font-medium">
-        {formatTimeFromDateTime(slot.slot_start)} -{" "}
-        {formatTimeFromDateTime(slot.slot_end)}
+        {formatTimeRange(rule.start_time, rule.end_time)}
       </div>
       <div className="text-xs">
-        {slot.is_blocked
+        {rule.is_blocked
           ? "Blocked"
-          : formatDuration(getSlotDurationMinutes(slot))}
+          : formatDuration(getRuleDurationMinutes(rule))}
       </div>
     </div>
   );
 }
 
-function SlotManagerRow({
-  slot,
+function RuleManagerRow({
+  rule,
   isToggling,
   isDeleting,
   onToggle,
   onDelete,
 }: {
-  slot: AvailabilitySlot;
+  rule: AvailabilityRule;
   isToggling: boolean;
   isDeleting: boolean;
-  onToggle: (slot: AvailabilitySlot, isBlocked: boolean) => void;
-  onDelete: (slot: AvailabilitySlot) => void;
+  onToggle: (rule: AvailabilityRule, isBlocked: boolean) => void;
+  onDelete: (rule: AvailabilityRule) => void;
 }) {
   const isPending = isToggling || isDeleting;
 
@@ -709,7 +719,7 @@ function SlotManagerRow({
     <div
       className={cn(
         "grid gap-3 rounded-lg border p-4 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center",
-        slot.is_blocked
+        rule.is_blocked
           ? "border-slate-300 bg-[repeating-linear-gradient(135deg,#f8fafc_0,#f8fafc_8px,#e2e8f0_8px,#e2e8f0_16px)]"
           : "border-control bg-surface-card",
       )}
@@ -717,22 +727,17 @@ function SlotManagerRow({
       <div>
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-label text-content-strong">
-            {new Intl.DateTimeFormat("en-US", {
-              weekday: "long",
-              month: "short",
-              day: "numeric",
-            }).format(getSlotDate(slot))}
+            Every {getWeekdayLabel(rule.day_of_week)}
           </p>
-          {slot.is_blocked ? (
+          {rule.is_blocked ? (
             <Badge variant="outline" className="border-slate-300 bg-slate-100">
               Blocked
             </Badge>
           ) : null}
         </div>
         <p className="mt-1 text-body-sm text-content-muted">
-          {formatTimeFromDateTime(slot.slot_start)} -{" "}
-          {formatTimeFromDateTime(slot.slot_end)} -{" "}
-          {formatDuration(getSlotDurationMinutes(slot))}
+          {formatTimeRange(rule.start_time, rule.end_time)} -{" "}
+          {formatDuration(getRuleDurationMinutes(rule))}
         </p>
       </div>
 
@@ -740,14 +745,14 @@ function SlotManagerRow({
         {isToggling ? (
           <LoaderCircle className="size-4 animate-spin text-content-muted" />
         ) : null}
-        <Label htmlFor={`slot-blocked-${slot.id}`} className="text-body-sm">
+        <Label htmlFor={`rule-blocked-${rule.id}`} className="text-body-sm">
           Blocked
         </Label>
         <Switch
-          id={`slot-blocked-${slot.id}`}
-          checked={slot.is_blocked}
+          id={`rule-blocked-${rule.id}`}
+          checked={rule.is_blocked}
           disabled={isPending}
-          onCheckedChange={(checked) => onToggle(slot, checked)}
+          onCheckedChange={(checked) => onToggle(rule, checked)}
           aria-label="Toggle blocked state"
         />
       </div>
@@ -757,9 +762,9 @@ function SlotManagerRow({
         variant="ghost"
         size="icon-sm"
         className="justify-self-start rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700 md:justify-self-end"
-        aria-label="Delete availability slot"
+        aria-label="Delete recurring rule"
         disabled={isPending}
-        onClick={() => onDelete(slot)}
+        onClick={() => onDelete(rule)}
       >
         {isDeleting ? (
           <LoaderCircle className="size-4 animate-spin" />
@@ -771,7 +776,7 @@ function SlotManagerRow({
   );
 }
 
-function SlotListSkeleton() {
+function RuleListSkeleton() {
   return (
     <div className="space-y-4">
       {[0, 1, 2].map((item) => (

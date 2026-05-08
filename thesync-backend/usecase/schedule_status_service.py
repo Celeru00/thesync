@@ -252,6 +252,12 @@ class DefaultScheduleStatusService(ScheduleStatusService):
                 "A scheduled time is required before approving a schedule."
             )
 
+        self.slot_guard.ensure_slot_available(
+            adviser_id=schedule.adviser_id,
+            scheduled_at=effective_scheduled_at,
+            excluded_schedule_id=schedule.id,
+        )
+
         updated_schedule = self.schedule_repository.update_status(
             schedule.id,
             approved_status_id,

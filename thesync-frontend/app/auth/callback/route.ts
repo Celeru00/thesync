@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { connectGoogleCalendar } from "@/lib/calendar/backend";
 import { getRequestAppOrigin } from "@/lib/auth/app-url";
 import { BackendAuthError, initializeBackendAuth } from "@/lib/auth/backend";
+import { getAllowedGoogleEmailDomain } from "@/lib/auth/google-domain";
 import { isAppRole, isSignupRole } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
@@ -45,11 +46,15 @@ function getCalendarReturnUrl(
 
 function isDomainRestrictionError(description: string | null) {
   const normalized = description?.trim().toLowerCase();
+  const allowedGoogleEmailDomain = getAllowedGoogleEmailDomain();
 
   return Boolean(
     normalized &&
-    (normalized.includes("@up.edu.ph") ||
-      normalized.includes("only google accounts are allowed")),
+    (normalized.includes("only google accounts are allowed") ||
+      normalized.includes("hosted domain") ||
+      (allowedGoogleEmailDomain
+        ? normalized.includes(allowedGoogleEmailDomain)
+        : false)),
   );
 }
 

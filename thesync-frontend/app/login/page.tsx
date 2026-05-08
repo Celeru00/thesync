@@ -4,6 +4,7 @@ import { AlertCircle, CalendarDays } from "lucide-react";
 import { GoogleRoleButton } from "@/components/auth/google-role-button";
 import { GoogleSignupLink } from "@/components/auth/google-signup-link";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { getAllowedGoogleEmailSuffix } from "@/lib/auth/google-domain";
 import { getPublicServerAuthState } from "@/lib/auth/server";
 import { getDashboardPathForRole } from "@/lib/auth/profile";
 
@@ -14,12 +15,18 @@ type LoginPageProps = {
 };
 
 function getErrorMessage(error?: string) {
+  const allowedGoogleEmailSuffix = getAllowedGoogleEmailSuffix();
+
   if (error === "google-auth-failed") {
-    return "We couldn't sign you in. Use your UP Google account and try again.";
+    return allowedGoogleEmailSuffix
+      ? `We couldn't sign you in. Use your Google account ending in ${allowedGoogleEmailSuffix} and try again.`
+      : "We couldn't sign you in. Try again.";
   }
 
   if (error === "domain-restricted") {
-    return "Only Google accounts ending in @up.edu.ph are allowed.";
+    return allowedGoogleEmailSuffix
+      ? `Only Google accounts ending in ${allowedGoogleEmailSuffix} are allowed.`
+      : "This Google account is not allowed here.";
   }
 
   if (error === "missing-code") {
@@ -58,6 +65,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const errorCode = Array.isArray(params.error)
     ? params.error[0]
     : params.error;
+  const allowedGoogleEmailSuffix = getAllowedGoogleEmailSuffix();
   const errorMessage = getErrorMessage(errorCode);
   const { appUser, authUser } = await getPublicServerAuthState();
 
@@ -100,7 +108,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 Welcome Back
               </h1>
               <p className="pt-1 text-[1.05rem] leading-7 text-content-muted">
-                Choose your role to continue with your UP email
+                {allowedGoogleEmailSuffix
+                  ? `Choose your role to continue with your Google account ending in ${allowedGoogleEmailSuffix}`
+                  : "Choose your role to continue with Google"}
               </p>
             </div>
 

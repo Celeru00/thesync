@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 
 from controller.dependencies import CurrentUser
 from model.availability import (
+    AvailabilityRule,
     AvailabilitySlot,
     AvailabilitySlotBlockedUpdateRequest,
     AvailabilitySlotCreateRequest,
@@ -28,16 +29,16 @@ class _UnavailableAvailabilityService:
     def _raise(self) -> None:
         raise AvailabilityServiceUnavailableError("Availability service is not configured.")
 
-    def create_slot(self, *args, **kwargs) -> AvailabilitySlot:
+    def create_slot(self, *args, **kwargs) -> AvailabilityRule:
         self._raise()
 
-    def list_slots(self, *args, **kwargs) -> list[AvailabilitySlot]:
+    def list_slots(self, *args, **kwargs) -> list[AvailabilityRule]:
         self._raise()
 
     def get_free_slots(self, *args, **kwargs) -> list[AvailabilitySlot]:
         self._raise()
 
-    def toggle_blocked(self, *args, **kwargs) -> AvailabilitySlot:
+    def toggle_blocked(self, *args, **kwargs) -> AvailabilityRule:
         self._raise()
 
     def delete_slot(self, *args, **kwargs) -> None:
@@ -74,12 +75,12 @@ def _raise_availability_http_error(exc: Exception) -> None:
         ) from exc
 
 
-@router.post("", response_model=AvailabilitySlot, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=AvailabilityRule, status_code=status.HTTP_201_CREATED)
 def create_availability_slot(
     payload: AvailabilitySlotCreateRequest,
     current_user: CurrentUser,
     service: AvailabilityServiceDependency,
-) -> AvailabilitySlot:
+) -> AvailabilityRule:
     try:
         return service.create_slot(current_user, payload)
     except (
@@ -92,11 +93,11 @@ def create_availability_slot(
         _raise_availability_http_error(exc)
 
 
-@router.get("", response_model=list[AvailabilitySlot])
+@router.get("", response_model=list[AvailabilityRule])
 def list_availability_slots(
     current_user: CurrentUser,
     service: AvailabilityServiceDependency,
-) -> list[AvailabilitySlot]:
+) -> list[AvailabilityRule]:
     try:
         return service.list_slots(current_user)
     except (AvailabilityForbiddenError, AvailabilityServiceUnavailableError) as exc:
@@ -120,13 +121,13 @@ def get_adviser_free_slots(
         _raise_availability_http_error(exc)
 
 
-@router.patch("/{availability_id}", response_model=AvailabilitySlot)
+@router.patch("/{availability_id}", response_model=AvailabilityRule)
 def toggle_availability_slot_blocked(
     availability_id: UUID,
     payload: AvailabilitySlotBlockedUpdateRequest,
     current_user: CurrentUser,
     service: AvailabilityServiceDependency,
-) -> AvailabilitySlot:
+) -> AvailabilityRule:
     try:
         return service.toggle_blocked(current_user, availability_id, payload)
     except (

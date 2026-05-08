@@ -36,7 +36,7 @@ from repository.supabase_client import (
 )
 
 PENDING_EMAIL_DOMAIN = "@pending.local"
-ALLOWED_EMAIL_DOMAIN = "@up.edu.ph"
+DEFAULT_ALLOWED_EMAIL_DOMAIN = "up.edu.ph"
 ROLE_ID_BY_APP_ROLE: dict[AppRole, int] = {
     "student": 1,
     "adviser": 2,
@@ -184,14 +184,55 @@ def _normalize_optional_email(value: str | None) -> str | None:
     return normalized.lower() if normalized else None
 
 
+def _normalize_email_domain(value: str | None) -> str | None:
+    normalized = _normalize_optional_text(value)
+
+    if normalized is None:
+        return None
+
+    return normalized.lower().removeprefix("@") or None
+
+
+def _get_allowed_email_domain() -> str | None:
+    settings = get_settings()
+    configured_domain = _normalize_email_domain(settings.allowed_google_email_domain)
+
+    if configured_domain:
+        return configured_domain
+
+    if settings.app_env.strip().lower() == "development":
+        return None
+
+    return DEFAULT_ALLOWED_EMAIL_DOMAIN
+
+
+def _get_allowed_email_suffix() -> str | None:
+    allowed_domain = _get_allowed_email_domain()
+    return f"@{allowed_domain}" if allowed_domain else None
+
+
+def _get_domain_restriction_error_message() -> str:
+    allowed_suffix = _get_allowed_email_suffix()
+
+    if allowed_suffix:
+        return f"Only Google accounts ending in {allowed_suffix} are allowed."
+
+    return "Only Google accounts from the allowed domain are allowed."
+
+
 def _has_allowed_email_domain(email: str | None) -> bool:
+    allowed_suffix = _get_allowed_email_suffix()
+
+    if allowed_suffix is None:
+        return True
+
     normalized_email = _normalize_optional_email(email)
-    return bool(normalized_email and normalized_email.endswith(ALLOWED_EMAIL_DOMAIN))
+    return bool(normalized_email and normalized_email.endswith(allowed_suffix))
 
 
 def _assert_allowed_email_domain(email: str | None) -> None:
     if not _has_allowed_email_domain(email):
-        raise DomainRestrictedAuthenticationError("Only @up.edu.ph Google accounts are allowed.")
+        raise DomainRestrictedAuthenticationError(_get_domain_restriction_error_message())
 
 
 def _get_metadata_value(claims: SupabaseClaims, *keys: str) -> str | None:

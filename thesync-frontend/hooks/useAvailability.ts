@@ -11,21 +11,31 @@ import {
 import {
   createSlot,
   deleteSlot,
+  getCommonFreeSlots,
   getFreeSlots,
   listMySlots,
   toggleSlotBlocked,
+  type AvailabilityRule,
   type AvailabilitySlot,
-  type CreateAvailabilitySlotRequest,
+  type CreateAvailabilityRuleRequest,
 } from "@/lib/api";
 
 export const availabilityQueryKeys = {
   all: ["availability"] as const,
   mySlots: () => ["availability", "my-slots"] as const,
-  freeSlots: (adviserId?: string, date?: string) =>
-    ["availability", "free-slots", adviserId ?? null, date ?? null] as const,
+  freeSlots: (adviserIds: string[], date?: string) =>
+    ["availability", "free-slots", adviserIds, date ?? null] as const,
 };
 
-export function useMySlots(): UseQueryResult<AvailabilitySlot[], Error> {
+function normalizeAdviserIds(adviserIds?: string[]): string[] {
+  return Array.from(
+    new Set(
+      adviserIds?.map((adviserId) => adviserId.trim()).filter(Boolean) ?? [],
+    ),
+  ).sort();
+}
+
+export function useMySlots(): UseQueryResult<AvailabilityRule[], Error> {
   return useQuery({
     queryKey: availabilityQueryKeys.mySlots(),
     queryFn: listMySlots,
@@ -33,20 +43,25 @@ export function useMySlots(): UseQueryResult<AvailabilitySlot[], Error> {
 }
 
 export function useFreeSlots(
-  adviserId?: string,
+  adviserIds?: string[],
   date?: string,
 ): UseQueryResult<AvailabilitySlot[], Error> {
+  const normalizedAdviserIds = normalizeAdviserIds(adviserIds);
+
   return useQuery({
-    queryKey: availabilityQueryKeys.freeSlots(adviserId, date),
-    queryFn: () => getFreeSlots(adviserId!, date),
-    enabled: Boolean(adviserId),
+    queryKey: availabilityQueryKeys.freeSlots(normalizedAdviserIds, date),
+    queryFn: () =>
+      normalizedAdviserIds.length === 1
+        ? getFreeSlots(normalizedAdviserIds[0], date)
+        : getCommonFreeSlots(normalizedAdviserIds, date),
+    enabled: Boolean(normalizedAdviserIds.length > 0 && date),
   });
 }
 
 export function useCreateSlot(): UseMutationResult<
-  AvailabilitySlot,
+  AvailabilityRule,
   Error,
-  CreateAvailabilitySlotRequest
+  CreateAvailabilityRuleRequest
 > {
   const queryClient = useQueryClient();
 
@@ -61,7 +76,7 @@ export function useCreateSlot(): UseMutationResult<
 }
 
 export function useToggleSlotBlocked(): UseMutationResult<
-  AvailabilitySlot,
+  AvailabilityRule,
   Error,
   { id: string; is_blocked: boolean },
   AvailabilityMutationContext
@@ -75,11 +90,11 @@ export function useToggleSlotBlocked(): UseMutationResult<
         queryKey: availabilityQueryKeys.mySlots(),
       });
 
-      const previousSlots = queryClient.getQueryData<AvailabilitySlot[]>(
+      const previousSlots = queryClient.getQueryData<AvailabilityRule[]>(
         availabilityQueryKeys.mySlots(),
       );
 
-      queryClient.setQueryData<AvailabilitySlot[]>(
+      queryClient.setQueryData<AvailabilityRule[]>(
         availabilityQueryKeys.mySlots(),
         (current) =>
           current?.map((slot) =>
@@ -100,7 +115,7 @@ export function useToggleSlotBlocked(): UseMutationResult<
       );
     },
     onSuccess: (slot) => {
-      queryClient.setQueryData<AvailabilitySlot[]>(
+      queryClient.setQueryData<AvailabilityRule[]>(
         availabilityQueryKeys.mySlots(),
         (current) =>
           current?.map((item) => (item.id === slot.id ? slot : item)) ?? [slot],
@@ -128,5 +143,5 @@ export function useDeleteSlot(): UseMutationResult<void, Error, string> {
 }
 
 type AvailabilityMutationContext = {
-  previousSlots: AvailabilitySlot[] | undefined;
+  previousSlots: AvailabilityRule[] | undefined;
 };
