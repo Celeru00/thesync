@@ -1,7 +1,5 @@
-import {
-  PortalCalendarView,
-  type PortalCalendarEvent,
-} from "@/components/calendar/portal-calendar-view";
+import { AdviserCalendarView } from "@/components/calendar/adviser-calendar-view";
+import { type PortalCalendarEvent } from "@/components/calendar/portal-calendar-view";
 import { CalendarConnectionGate } from "@/components/calendar/calendar-connection-gate";
 import { getCalendarStatusMessage } from "@/lib/calendar/messages";
 import {
@@ -93,9 +91,8 @@ export default async function AdviserCalendarPage({
   });
 
   return (
-    <PortalCalendarView
-      portalRole="adviser"
-      events={events}
+    <AdviserCalendarView
+      initialEvents={events}
       primaryCalendarLabel={currentUser.full_name}
       primaryCalendarOwnerId={currentUser.id}
     />
