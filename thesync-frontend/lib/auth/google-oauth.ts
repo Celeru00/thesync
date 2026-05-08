@@ -2,10 +2,10 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { buildAuthCallbackUrl, getBrowserAppOrigin } from "@/lib/auth/app-url";
-import { getAllowedGoogleEmailDomain } from "@/lib/auth/google-domain";
 import type { AppRole } from "@/lib/auth/profile";
 
 export type GoogleAuthFlow = "login" | "signup";
+const ALLOWED_GOOGLE_EMAIL_DOMAIN = "up.edu.ph";
 
 export async function startGoogleAuth({
   flow,
@@ -15,7 +15,6 @@ export async function startGoogleAuth({
   role?: AppRole;
 }) {
   const supabase = createClient();
-  const allowedGoogleEmailDomain = getAllowedGoogleEmailDomain();
   const redirectUrl = buildAuthCallbackUrl(getBrowserAppOrigin(), {
     flow,
     role: role ?? null,
@@ -25,11 +24,9 @@ export async function startGoogleAuth({
     provider: "google",
     options: {
       redirectTo: redirectUrl.toString(),
-      queryParams: allowedGoogleEmailDomain
-        ? {
-            hd: allowedGoogleEmailDomain,
-          }
-        : undefined,
+      queryParams: {
+        hd: ALLOWED_GOOGLE_EMAIL_DOMAIN,
+      },
     },
   });
 }

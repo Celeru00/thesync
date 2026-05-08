@@ -1,16 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   CalendarDays,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  CircleCheckBig,
   Clock3,
   FileText,
   Layers3,
+  LoaderCircle,
   Plus,
   UserRound,
+  UsersRound,
   X,
 } from "lucide-react";
 
@@ -49,13 +60,17 @@ import {
 import { useCreateSchedule } from "@/hooks/useSchedules";
 import type { GoogleCalendarOverlaySource } from "@/lib/calendar/backend";
 import {
-  buildScheduledAtIso,
   parseConsultationRequestError,
   scheduleTypeIdByValue,
   type ConsultationRequestFieldName,
 } from "@/lib/consultation-request";
-import { type ConsultationRequestType } from "@/lib/mock/student-consultations";
+import { type AvailabilitySlot } from "@/lib/api";
+import {
+  type ConsultationRequestType,
+  type TimePeriod,
+} from "@/lib/mock/student-consultations";
 import { cn } from "@/lib/utils";
+import { useFreeSlots } from "@/hooks/useAvailability";
 
 type CalendarView = "month" | "week";
 type CalendarPortalRole = "student" | "adviser";
@@ -625,6 +640,163 @@ function buildSlotDate(
   );
 }
 
+function formatAvailabilityTimeRange(start: string, end: string) {
+  return `${timeFormatter.format(new Date(start))} - ${timeFormatter.format(
+    new Date(end),
+  )}`;
+}
+
+function matchesAdviserSearch(
+  adviser: {
+    name: string;
+    department: string;
+    departmentCode: string;
+    email: string;
+  },
+  searchTerm: string,
+) {
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+
+  if (!normalizedSearch) {
+    return true;
+  }
+
+  return [
+    adviser.name,
+    adviser.department,
+    adviser.departmentCode,
+    adviser.email,
+  ].some((value) => value.toLowerCase().includes(normalizedSearch));
+}
+
+const requestTimePeriodOptions: Array<{ value: TimePeriod; label: string }> = [
+  { value: "morning", label: "Morning" },
+  { value: "afternoon", label: "Afternoon" },
+  { value: "all-day", label: "All Day" },
+];
+
+function isTimePeriodMatch(dateTime: string, period: TimePeriod) {
+  if (period === "all-day") {
+    return true;
+  }
+
+  const hour = new Date(dateTime).getHours();
+  return period === "morning" ? hour < 12 : hour >= 12;
+}
+
+function isDefined<T>(value: T | null | undefined): value is T {
+  return value != null;
+}
+
+function intervalsOverlap(
+  leftStart: Date,
+  leftEnd: Date,
+  rightStart: Date,
+  rightEnd: Date,
+) {
+  return leftStart < rightEnd && leftEnd > rightStart;
+}
+
+function pickSuggestedAvailabilitySlot(
+  slots: AvailabilitySlot[],
+  suggestedStart: Date,
+  suggestedEnd: Date,
+) {
+  const exactMatch =
+    slots.find(
+      (slot) =>
+        new Date(slot.slot_start).getTime() === suggestedStart.getTime() &&
+        new Date(slot.slot_end).getTime() === suggestedEnd.getTime(),
+    ) ?? null;
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  const overlappingSlots = slots
+    .filter((slot) =>
+      intervalsOverlap(
+        new Date(slot.slot_start),
+        new Date(slot.slot_end),
+        suggestedStart,
+        suggestedEnd,
+      ),
+    )
+    .sort(
+      (left, right) =>
+        Math.abs(
+          new Date(left.slot_start).getTime() - suggestedStart.getTime(),
+        ) -
+        Math.abs(
+          new Date(right.slot_start).getTime() - suggestedStart.getTime(),
+        ),
+    );
+
+  if (overlappingSlots.length > 0) {
+    return overlappingSlots[0];
+  }
+
+  return (
+    slots.find(
+      (slot) => new Date(slot.slot_start).getTime() >= suggestedStart.getTime(),
+    ) ??
+    slots[0] ??
+    null
+  );
+}
+
+function buildWeekSlotKey(dayIndex: number, slotIndex: number) {
+  return `${dayIndex}-${slotIndex}`;
+}
+
+function getSlotBounds(startSlotIndex: number, endSlotIndex: number) {
+  return [
+    Math.min(startSlotIndex, endSlotIndex),
+    Math.max(startSlotIndex, endSlotIndex),
+  ] as const;
+}
+
+function isWeekSlotRangeOpen(
+  dayIndex: number,
+  startSlotIndex: number,
+  endSlotIndex: number,
+  occupiedSlots: Set<string>,
+) {
+  const [start, end] = getSlotBounds(startSlotIndex, endSlotIndex);
+
+  for (let slotIndex = start; slotIndex <= end; slotIndex += 1) {
+    if (occupiedSlots.has(buildWeekSlotKey(dayIndex, slotIndex))) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function findReachableWeekSlotIndex(
+  dayIndex: number,
+  startSlotIndex: number,
+  targetSlotIndex: number,
+  occupiedSlots: Set<string>,
+) {
+  let reachableSlotIndex = startSlotIndex;
+  const step = targetSlotIndex >= startSlotIndex ? 1 : -1;
+
+  for (
+    let slotIndex = startSlotIndex + step;
+    step > 0 ? slotIndex <= targetSlotIndex : slotIndex >= targetSlotIndex;
+    slotIndex += step
+  ) {
+    if (occupiedSlots.has(buildWeekSlotKey(dayIndex, slotIndex))) {
+      break;
+    }
+
+    reachableSlotIndex = slotIndex;
+  }
+
+  return reachableSlotIndex;
+}
+
 export function PortalCalendarView({
   portalRole = "student",
   primaryCalendarLabel = "My Calendar",
@@ -813,6 +985,16 @@ export function PortalCalendarView({
     (event) => event.status === "pending",
   ).length;
   const canCreateRequests = portalRole === "student";
+  const quickRequestSuggestedAdviserId = useMemo(() => {
+    const adviserCalendarIds = selectedOverlayCalendars
+      .filter(
+        (calendar) => calendar.roleName.trim().toLowerCase() === "adviser",
+      )
+      .map((calendar) => calendar.userId)
+      .filter((userId) => visibleWeekCalendarIds.has(userId));
+
+    return adviserCalendarIds.length === 1 ? adviserCalendarIds[0] : "";
+  }, [selectedOverlayCalendars, visibleWeekCalendarIds]);
 
   function handleAddOverlayCalendar(source: GoogleCalendarOverlaySource) {
     setSelectedOverlayCalendars((current) => [
@@ -952,6 +1134,7 @@ export function PortalCalendarView({
       {requestDraft ? (
         <CreateRequestModal
           draft={requestDraft}
+          initialAdviserId={quickRequestSuggestedAdviserId}
           onClose={() => setRequestDraft(null)}
         />
       ) : null}
@@ -1603,15 +1786,24 @@ function WeekGrid({
       return;
     }
 
-    const startSlotIndex = Math.min(
-      currentSelection.startSlotIndex,
-      currentSelection.endSlotIndex,
-    );
-    const endSlotIndex = Math.max(
+    const [startSlotIndex, endSlotIndex] = getSlotBounds(
       currentSelection.startSlotIndex,
       currentSelection.endSlotIndex,
     );
     const selectedDay = weekDays[currentSelection.dayIndex];
+
+    if (
+      !isWeekSlotRangeOpen(
+        currentSelection.dayIndex,
+        startSlotIndex,
+        endSlotIndex,
+        occupiedSlots,
+      )
+    ) {
+      setDragSelection(null);
+      return;
+    }
+
     const startAt = buildSlotDate(selectedDay, weekTimeSlots[startSlotIndex]);
     const endAt = addMinutes(
       buildSlotDate(selectedDay, weekTimeSlots[endSlotIndex]),
@@ -1620,7 +1812,7 @@ function WeekGrid({
 
     setDragSelection(null);
     onRequestSlotSelect(startAt, endAt);
-  }, [onRequestSlotSelect, weekDays, weekTimeSlots]);
+  }, [occupiedSlots, onRequestSlotSelect, weekDays, weekTimeSlots]);
 
   useEffect(() => {
     if (!canCreateRequests) {
@@ -1641,7 +1833,10 @@ function WeekGrid({
   }, [canCreateRequests, finalizeDragSelection]);
 
   function handleSlotMouseDown(dayIndex: number, slotIndex: number) {
-    if (!canCreateRequests || occupiedSlots.has(`${dayIndex}-${slotIndex}`)) {
+    if (
+      !canCreateRequests ||
+      occupiedSlots.has(buildWeekSlotKey(dayIndex, slotIndex))
+    ) {
       return;
     }
 
@@ -1658,13 +1853,16 @@ function WeekGrid({
         return currentSelection;
       }
 
-      if (occupiedSlots.has(`${dayIndex}-${slotIndex}`)) {
-        return currentSelection;
-      }
+      const reachableSlotIndex = findReachableWeekSlotIndex(
+        dayIndex,
+        currentSelection.startSlotIndex,
+        slotIndex,
+        occupiedSlots,
+      );
 
       return {
         ...currentSelection,
-        endSlotIndex: slotIndex,
+        endSlotIndex: reachableSlotIndex,
       };
     });
   }
@@ -1674,11 +1872,7 @@ function WeekGrid({
       return false;
     }
 
-    const startSlotIndex = Math.min(
-      dragSelection.startSlotIndex,
-      dragSelection.endSlotIndex,
-    );
-    const endSlotIndex = Math.max(
+    const [startSlotIndex, endSlotIndex] = getSlotBounds(
       dragSelection.startSlotIndex,
       dragSelection.endSlotIndex,
     );
@@ -1800,7 +1994,9 @@ function WeekGrid({
                   : null}
               </div>,
               ...weekDays.map((day, dayIndex) => {
-                const occupied = occupiedSlots.has(`${dayIndex}-${slotIndex}`);
+                const occupied = occupiedSlots.has(
+                  buildWeekSlotKey(dayIndex, slotIndex),
+                );
                 const selected = isSlotSelected(dayIndex, slotIndex);
 
                 return (
@@ -1986,39 +2182,202 @@ function WeekEventDetailsModal({
 
 function CreateRequestModal({
   draft,
+  initialAdviserId,
   onClose,
 }: {
   draft: RequestDraft;
+  initialAdviserId?: string;
   onClose: () => void;
 }) {
-  const [requestType, setRequestType] = useState<ConsultationRequestType>();
-  const [adviserId, setAdviserId] = useState("");
+  const [requestType, setRequestType] =
+    useState<ConsultationRequestType>("consultation");
+  const [adviserId, setAdviserId] = useState(initialAdviserId ?? "");
+  const [selectedPanelistIds, setSelectedPanelistIds] = useState<string[]>([]);
+  const [adviserSearchTerm, setAdviserSearchTerm] = useState("");
+  const [panelistSearchTerm, setPanelistSearchTerm] = useState("");
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>("all-day");
+  const [selectedSlotKey, setSelectedSlotKey] = useState<string | null>(null);
   const [topic, setTopic] = useState("");
   const [description, setDescription] = useState("");
   const [fieldErrors, setFieldErrors] = useState<
     Partial<Record<ConsultationRequestFieldName, string>>
   >({});
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const { data: advisers = [], isLoading: isLoadingAdvisers } = useAdvisers();
+  const {
+    data: advisers = [],
+    error: advisersError,
+    isLoading: isLoadingAdvisers,
+  } = useAdvisers();
   const createScheduleMutation = useCreateSchedule();
-
+  const deferredAdviserSearchTerm = useDeferredValue(adviserSearchTerm);
+  const deferredPanelistSearchTerm = useDeferredValue(panelistSearchTerm);
+  const selectedDateValue = toDateInputValue(draft.date);
+  const suggestedWindowLabel = `${timeFormatter.format(draft.date)} - ${timeFormatter.format(
+    draft.endAt,
+  )}`;
+  const isDefenseRequest = requestType === "defense";
   const selectedAdviser = useMemo(
     () => advisers.find((adviser) => adviser.id === adviserId) ?? null,
     [adviserId, advisers],
   );
-  const canSubmit = Boolean(requestType && adviserId && topic.trim());
+  const selectedPanelists = useMemo(
+    () =>
+      advisers.filter((adviser) => selectedPanelistIds.includes(adviser.id)),
+    [advisers, selectedPanelistIds],
+  );
+  const filteredAdvisers = useMemo(
+    () =>
+      advisers.filter((adviser) =>
+        matchesAdviserSearch(adviser, deferredAdviserSearchTerm),
+      ),
+    [advisers, deferredAdviserSearchTerm],
+  );
+  const filteredPanelists = useMemo(
+    () =>
+      advisers
+        .filter((adviser) => adviser.id !== adviserId)
+        .filter((adviser) =>
+          matchesAdviserSearch(adviser, deferredPanelistSearchTerm),
+        )
+        .sort((left, right) => {
+          const leftSelected = selectedPanelistIds.includes(left.id) ? 1 : 0;
+          const rightSelected = selectedPanelistIds.includes(right.id) ? 1 : 0;
+
+          if (leftSelected !== rightSelected) {
+            return rightSelected - leftSelected;
+          }
+
+          return left.name.localeCompare(right.name);
+        }),
+    [adviserId, advisers, deferredPanelistSearchTerm, selectedPanelistIds],
+  );
+  const availabilityParticipantIds = (
+    isDefenseRequest ? [adviserId, ...selectedPanelistIds] : [adviserId]
+  ).filter(Boolean);
+  const availabilityParticipants = (
+    isDefenseRequest
+      ? [selectedAdviser, ...selectedPanelists]
+      : [selectedAdviser]
+  ).filter(isDefined);
+  const {
+    data: freeSlots = [],
+    isLoading: isLoadingSlots,
+    error: slotsError,
+  } = useFreeSlots(availabilityParticipantIds, selectedDateValue);
+  const availableSlots = useMemo(
+    () =>
+      [...freeSlots]
+        .filter((slot) => isTimePeriodMatch(slot.slot_start, timePeriod))
+        .sort(
+          (left, right) =>
+            new Date(left.slot_start).getTime() -
+            new Date(right.slot_start).getTime(),
+        ),
+    [freeSlots, timePeriod],
+  );
+  const availableSlotCount = availableSlots.length;
+  const isDefenseWithPanelists =
+    isDefenseRequest && selectedPanelistIds.length > 0;
+  const suggestedSlotKeys = useMemo(
+    () =>
+      new Set(
+        availableSlots
+          .filter((slot) =>
+            intervalsOverlap(
+              new Date(slot.slot_start),
+              new Date(slot.slot_end),
+              draft.date,
+              draft.endAt,
+            ),
+          )
+          .map((slot) => `${slot.slot_start}|${slot.slot_end}`),
+      ),
+    [availableSlots, draft.date, draft.endAt],
+  );
+  const selectedSlot = useMemo(() => {
+    if (!adviserId) {
+      return null;
+    }
+
+    const manuallySelectedSlot =
+      availableSlots.find(
+        (slot) => `${slot.slot_start}|${slot.slot_end}` === selectedSlotKey,
+      ) ?? null;
+
+    if (manuallySelectedSlot) {
+      return manuallySelectedSlot;
+    }
+
+    return pickSuggestedAvailabilitySlot(
+      availableSlots,
+      draft.date,
+      draft.endAt,
+    );
+  }, [adviserId, availableSlots, draft.date, draft.endAt, selectedSlotKey]);
+  const selectedSlotStart = selectedSlot?.slot_start ?? null;
+  const selectedSlotEnd = selectedSlot?.slot_end ?? null;
+  const canSubmit = Boolean(
+    adviserId && selectedSlotStart && selectedSlotEnd && topic.trim(),
+  );
+
+  function handleScheduleTypeChange(value: ConsultationRequestType) {
+    setRequestType(value);
+    setSelectedSlotKey(null);
+    setFieldErrors((current) => ({
+      ...current,
+      scheduleType: undefined,
+      selectedTimeSlot: undefined,
+    }));
+    setSubmitError(null);
+
+    if (value !== "defense") {
+      setSelectedPanelistIds([]);
+      setPanelistSearchTerm("");
+    }
+  }
+
+  function handleAdviserChange(value: string) {
+    setAdviserId(value);
+    setSelectedSlotKey(null);
+    setFieldErrors((current) => ({
+      ...current,
+      selectedAdviserId: undefined,
+      selectedTimeSlot: undefined,
+    }));
+    setSubmitError(null);
+    setSelectedPanelistIds((current) =>
+      current.filter((item) => item !== value),
+    );
+  }
+
+  function handlePanelistToggle(panelistId: string, checked: boolean) {
+    setSelectedSlotKey(null);
+    setFieldErrors((current) => ({
+      ...current,
+      selectedTimeSlot: undefined,
+    }));
+    setSubmitError(null);
+    setSelectedPanelistIds((current) => {
+      if (checked) {
+        return [...current, panelistId];
+      }
+
+      return current.filter((item) => item !== panelistId);
+    });
+  }
 
   async function handleSubmit() {
     const nextFieldErrors: Partial<
       Record<ConsultationRequestFieldName, string>
     > = {};
 
-    if (!requestType) {
-      nextFieldErrors.scheduleType = "Please select a consultation type.";
-    }
-
     if (!adviserId) {
       nextFieldErrors.selectedAdviserId = "Please choose an adviser.";
+    }
+
+    if (!selectedSlotStart || !selectedSlotEnd) {
+      nextFieldErrors.selectedTimeSlot =
+        "Please choose an available time slot.";
     }
 
     if (!topic.trim()) {
@@ -2031,7 +2390,7 @@ function CreateRequestModal({
       return;
     }
 
-    if (!requestType) {
+    if (!selectedSlotStart) {
       return;
     }
 
@@ -2043,14 +2402,16 @@ function CreateRequestModal({
         adviser_id: adviserId,
         type_id: scheduleTypeIdByValue[requestType],
         topic: topic.trim(),
-        scheduled_at: buildScheduledAtIso(
-          toDateInputValue(draft.date),
-          toTimeInputValue(draft.date),
-        ),
+        scheduled_at: selectedSlotStart,
       });
 
-      setRequestType(undefined);
+      setRequestType("consultation");
       setAdviserId("");
+      setSelectedPanelistIds([]);
+      setAdviserSearchTerm("");
+      setPanelistSearchTerm("");
+      setTimePeriod("all-day");
+      setSelectedSlotKey(null);
       setTopic("");
       setDescription("");
       onClose();
@@ -2068,172 +2429,505 @@ function CreateRequestModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 px-4 py-8 backdrop-blur-[2px]">
-      <div className="w-full max-w-[32rem] rounded-[1.75rem] border border-brand-subtle bg-surface-card shadow-elevated">
-        <div className="flex items-start justify-between gap-4 px-6 py-6 sm:px-7">
-          <div className="space-y-1.5">
-            <h2 className="text-subheading">Create Consultation Request</h2>
-            <p className="text-[1rem] leading-7 text-content-muted">
-              Schedule a new consultation for the selected time range
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="rounded-full"
-            onClick={onClose}
-            aria-label="Close create request modal"
-          >
-            <X className="size-4" />
-          </Button>
-        </div>
-
-        <div className="space-y-5 px-6 pb-6 sm:px-7 sm:pb-7">
-          <div className="grid gap-3 rounded-[1.15rem] border border-brand-subtle bg-primary-tint/45 p-4 sm:grid-cols-2">
-            <SummaryTile
-              icon={CalendarDays}
-              label="Date"
-              value={requestDateFormatter.format(draft.date)}
-            />
-            <SummaryTile
-              icon={Clock3}
-              label="Time"
-              value={`${timeFormatter.format(draft.date)} - ${timeFormatter.format(
-                draft.endAt,
-              )}`}
-            />
-          </div>
-
-          <ModalField icon={FileText} label="Consultation Type">
-            <Select
-              value={requestType ?? undefined}
-              onValueChange={(value) => {
-                setRequestType(value as ConsultationRequestType);
-                setFieldErrors((current) => ({
-                  ...current,
-                  scheduleType: undefined,
-                }));
-                setSubmitError(null);
-              }}
-            >
-              <SelectTrigger className="h-11 rounded-[0.95rem]">
-                <SelectValue placeholder="Select consultation type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="consultation">Consultation</SelectItem>
-                <SelectItem value="defense">Defense</SelectItem>
-              </SelectContent>
-            </Select>
-            <InlineFieldError message={fieldErrors.scheduleType} />
-          </ModalField>
-
-          <ModalField icon={UserRound} label="Select Adviser">
-            <Select
-              value={adviserId || undefined}
-              onValueChange={(value) => {
-                setAdviserId(value);
-                setFieldErrors((current) => ({
-                  ...current,
-                  selectedAdviserId: undefined,
-                }));
-                setSubmitError(null);
-              }}
-            >
-              <SelectTrigger className="h-11 rounded-[0.95rem]">
-                <SelectValue
-                  placeholder={
-                    isLoadingAdvisers
-                      ? "Loading advisers..."
-                      : "Choose your adviser"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {advisers.map((adviser) => (
-                  <SelectItem key={adviser.id} value={adviser.id}>
-                    {adviser.name} ({adviser.departmentCode})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <InlineFieldError message={fieldErrors.selectedAdviserId} />
-          </ModalField>
-
-          <ModalField label="Topic / Title">
-            <Input
-              value={topic}
-              onChange={(event) => {
-                setTopic(event.target.value);
-                setFieldErrors((current) => ({
-                  ...current,
-                  topic: undefined,
-                }));
-                setSubmitError(null);
-              }}
-              placeholder="e.g., Chapter 1 Review, Methodology Discussion"
-              className="h-11 rounded-[0.95rem]"
-            />
-            <InlineFieldError message={fieldErrors.topic} />
-          </ModalField>
-
-          <ModalField label="Description / Agenda">
-            <Textarea
-              value={description}
-              onChange={(event) =>
-                setDescription(event.target.value.slice(0, 350))
-              }
-              placeholder="Provide details about what you'd like to discuss during this consultation..."
-              className="min-h-[7.5rem] rounded-[0.95rem]"
-            />
-          </ModalField>
-
-          {submitError ? (
-            <div className="rounded-[1rem] border border-destructive/25 bg-destructive/10 px-4 py-3 text-body-sm text-destructive">
-              {submitError}
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-gray-900/40 px-4 py-8 backdrop-blur-[2px]">
+      <div className="flex min-h-full items-start justify-center">
+        <div className="flex max-h-[calc(100vh-4rem)] w-full max-w-[32rem] flex-col overflow-hidden rounded-[1.75rem] border border-brand-subtle bg-surface-card shadow-elevated">
+          <div className="flex shrink-0 items-start justify-between gap-4 px-6 py-6 sm:px-7">
+            <div className="space-y-1.5">
+              <h2 className="text-subheading">Create Consultation Request</h2>
+              <p className="text-[1rem] leading-7 text-content-muted">
+                Schedule a new consultation for the selected time range
+              </p>
             </div>
-          ) : null}
-
-          {selectedAdviser ? (
-            <div className="rounded-[1rem] border border-surface bg-surface-muted-soft px-4 py-3 text-body-sm text-content-muted">
-              Request will be sent to{" "}
-              <span className="font-medium text-content-strong">
-                {selectedAdviser.name}
-              </span>
-              {" · "}
-              {selectedAdviser.departmentCode}
-            </div>
-          ) : null}
-
-          <div className="flex flex-col gap-3 pt-2 sm:flex-row">
             <Button
               type="button"
-              variant="outline"
-              className="h-11 flex-1 rounded-[0.95rem]"
+              variant="ghost"
+              size="icon-sm"
+              className="rounded-full"
               onClick={onClose}
+              aria-label="Close create request modal"
             >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              className="h-11 flex-1 rounded-[0.95rem]"
-              disabled={!canSubmit || createScheduleMutation.isPending}
-              onClick={handleSubmit}
-            >
-              {createScheduleMutation.isPending
-                ? "Submitting..."
-                : "Create Request"}
+              <X className="size-4" />
             </Button>
           </div>
 
-          <div className="text-center text-body-sm text-content-muted">
-            Need the full workflow?{" "}
-            <Link
-              href="/student/consultations/request"
-              className="font-medium text-brand underline-offset-4 hover:text-brand-strong hover:underline"
-            >
-              Open the full request form
-            </Link>
+          <div className="space-y-5 overflow-y-auto px-6 pb-6 sm:px-7 sm:pb-7">
+            <div className="grid gap-3 rounded-[1.15rem] border border-brand-subtle bg-primary-tint/45 p-4 sm:grid-cols-2">
+              <SummaryTile
+                icon={CalendarDays}
+                label="Date"
+                value={requestDateFormatter.format(draft.date)}
+              />
+              <SummaryTile
+                icon={Clock3}
+                label="Suggested Window"
+                value={suggestedWindowLabel}
+              />
+            </div>
+
+            <ModalField icon={FileText} label="Consultation Type">
+              <Select
+                value={requestType ?? undefined}
+                onValueChange={(value) =>
+                  handleScheduleTypeChange(value as ConsultationRequestType)
+                }
+              >
+                <SelectTrigger className="h-11 rounded-[0.95rem]">
+                  <SelectValue placeholder="Select consultation type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="consultation">Consultation</SelectItem>
+                  <SelectItem value="defense">Defense</SelectItem>
+                </SelectContent>
+              </Select>
+              <InlineFieldError message={fieldErrors.scheduleType} />
+            </ModalField>
+
+            <ModalField icon={UserRound} label="Select Adviser">
+              <div className="space-y-3 rounded-[1rem] border border-surface bg-surface-card p-4 shadow-soft">
+                <SearchInput
+                  value={adviserSearchTerm}
+                  onChange={(event) => setAdviserSearchTerm(event.target.value)}
+                  placeholder="Search advisers by name, department, or email"
+                  className="h-11 rounded-[0.9rem]"
+                />
+
+                {selectedAdviser ? (
+                  <div className="rounded-[1rem] border border-brand-subtle bg-primary-tint/15 px-4 py-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-body font-medium text-brand-strong">
+                          {selectedAdviser.name}
+                        </div>
+                        <div className="mt-1 text-body-sm text-content-muted">
+                          {selectedAdviser.department}
+                        </div>
+                      </div>
+                      <Badge className="shrink-0">Selected adviser</Badge>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
+                  {isLoadingAdvisers ? (
+                    <p className="rounded-[0.9rem] border border-dashed border-surface px-4 py-6 text-center text-body-sm text-content-muted">
+                      Loading advisers...
+                    </p>
+                  ) : filteredAdvisers.length > 0 ? (
+                    filteredAdvisers.map((adviser) => {
+                      const isSelected = adviser.id === adviserId;
+
+                      return (
+                        <button
+                          key={adviser.id}
+                          type="button"
+                          onClick={() => handleAdviserChange(adviser.id)}
+                          className={cn(
+                            "w-full rounded-[1rem] border px-4 py-3 text-left transition-colors",
+                            isSelected
+                              ? "border-brand bg-primary-tint/20 shadow-[0_0_0_1px_color-mix(in_srgb,var(--primary)_35%,transparent)]"
+                              : "border-surface bg-white hover:border-brand-subtle hover:bg-surface-muted-soft",
+                          )}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-body font-medium text-content-strong">
+                                {adviser.name}
+                              </div>
+                              <div className="mt-1 text-body-sm text-content-muted">
+                                {adviser.department}
+                              </div>
+                            </div>
+                            <Badge
+                              variant={isSelected ? "default" : "outline"}
+                              className="shrink-0"
+                            >
+                              {isSelected ? "Selected" : adviser.departmentCode}
+                            </Badge>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2 text-body-sm text-content-muted">
+                            <span>{adviser.email}</span>
+                            <span>•</span>
+                            <span>{adviser.availability} availability</span>
+                          </div>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <p className="rounded-[0.9rem] border border-dashed border-surface px-4 py-6 text-center text-body-sm text-content-muted">
+                      No advisers match your search.
+                    </p>
+                  )}
+                </div>
+              </div>
+              {advisersError ? (
+                <InlineFieldError message="Unable to load advisers right now." />
+              ) : null}
+              {!isLoadingAdvisers && advisers.length === 0 ? (
+                <InlineFieldError message="No advisers are available right now." />
+              ) : null}
+              <InlineFieldError message={fieldErrors.selectedAdviserId} />
+            </ModalField>
+
+            {isDefenseRequest ? (
+              <ModalField icon={UsersRound} label="Select Panelists (Optional)">
+                <div className="rounded-[1rem] border border-surface bg-surface-card px-4 py-4 shadow-soft">
+                  <div className="space-y-4">
+                    <SearchInput
+                      value={panelistSearchTerm}
+                      onChange={(event) =>
+                        setPanelistSearchTerm(event.target.value)
+                      }
+                      placeholder="Search panelists by name, department, or email"
+                      className="h-11 rounded-[0.9rem]"
+                    />
+
+                    {selectedPanelists.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {selectedPanelists.map((panelist) => (
+                          <button
+                            key={panelist.id}
+                            type="button"
+                            onClick={() =>
+                              handlePanelistToggle(panelist.id, false)
+                            }
+                            className="inline-flex items-center gap-2 rounded-full bg-primary-tint/20 px-3 py-1.5 text-body-sm font-medium text-brand-strong transition-colors hover:bg-primary-tint/30"
+                          >
+                            <span>{panelist.name}</span>
+                            <span aria-hidden="true">×</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-body-sm text-content-muted">
+                        Select one or more panelists. The defense time options
+                        below will only show shared availability across everyone
+                        you choose.
+                      </p>
+                    )}
+
+                    <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
+                      {filteredPanelists.length > 0 ? (
+                        filteredPanelists.map((panelist) => {
+                          const checked = selectedPanelistIds.includes(
+                            panelist.id,
+                          );
+
+                          return (
+                            <label
+                              key={panelist.id}
+                              className={cn(
+                                "flex cursor-pointer items-start gap-3 rounded-[1rem] border px-4 py-3 transition-colors",
+                                checked
+                                  ? "border-brand bg-primary-tint/15"
+                                  : "border-surface bg-white hover:border-brand-subtle hover:bg-surface-muted-soft",
+                              )}
+                            >
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(value) =>
+                                  handlePanelistToggle(
+                                    panelist.id,
+                                    Boolean(value),
+                                  )
+                                }
+                                className="mt-1"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="text-body font-medium text-content-strong">
+                                      {panelist.name}
+                                    </div>
+                                    <div className="mt-1 text-body-sm text-content-muted">
+                                      {panelist.department}
+                                    </div>
+                                  </div>
+                                  <Badge
+                                    variant={checked ? "default" : "outline"}
+                                    className="shrink-0"
+                                  >
+                                    {checked
+                                      ? "Selected"
+                                      : panelist.departmentCode}
+                                  </Badge>
+                                </div>
+                                <div className="mt-3 flex flex-wrap gap-2 text-body-sm text-content-muted">
+                                  <span>{panelist.email}</span>
+                                  <span>•</span>
+                                  <span>
+                                    {panelist.availability} availability
+                                  </span>
+                                </div>
+                              </div>
+                            </label>
+                          );
+                        })
+                      ) : (
+                        <p className="rounded-[0.9rem] border border-dashed border-surface px-4 py-6 text-center text-body-sm text-content-muted">
+                          No panelists match your search.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <p className="mt-4 text-body-sm text-content-muted">
+                    {selectedPanelistIds.length} panelist
+                    {selectedPanelistIds.length === 1 ? "" : "s"} selected
+                    {panelistSearchTerm.trim()
+                      ? ` • ${filteredPanelists.length} match search`
+                      : ""}
+                  </p>
+                </div>
+              </ModalField>
+            ) : null}
+
+            <ModalField icon={Clock3} label="Available Time Slots">
+              <div className="space-y-4 rounded-[1rem] border border-surface bg-surface-card p-4 shadow-soft">
+                {adviserId ? (
+                  <>
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="space-y-1">
+                        <div className="text-body font-medium text-content-strong">
+                          {isLoadingSlots
+                            ? "Checking availability..."
+                            : `${availableSlotCount} ${
+                                availableSlotCount === 1
+                                  ? isDefenseWithPanelists
+                                    ? "common slot"
+                                    : "slot"
+                                  : isDefenseWithPanelists
+                                    ? "common slots"
+                                    : "slots"
+                              } available on ${requestDateFormatter.format(draft.date)}`}
+                        </div>
+                        <p className="text-body-sm text-content-muted">
+                          {isDefenseRequest
+                            ? "Defense slots must be shared across your selected adviser and panelists."
+                            : "Slots already exclude blocked windows, approved schedules, and Google Calendar conflicts."}
+                        </p>
+                      </div>
+
+                      <div className="inline-flex self-start rounded-full bg-surface-muted p-1">
+                        {requestTimePeriodOptions.map((option) => {
+                          const active = timePeriod === option.value;
+
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => {
+                                setTimePeriod(option.value);
+                                setSelectedSlotKey(null);
+                                setFieldErrors((current) => ({
+                                  ...current,
+                                  selectedTimeSlot: undefined,
+                                }));
+                                setSubmitError(null);
+                              }}
+                              className={cn(
+                                "rounded-full px-4 py-2 text-[0.95rem] font-medium transition-colors",
+                                active
+                                  ? "bg-brand text-brand-on shadow-soft"
+                                  : "text-content-strong hover:text-brand-strong",
+                              )}
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {availabilityParticipants.length > 0 ? (
+                      <div className="flex flex-col gap-2 text-body-sm text-content-muted">
+                        <div className="flex items-start gap-2">
+                          <Clock3 className="mt-0.5 size-4 shrink-0" />
+                          <span>
+                            {isDefenseWithPanelists
+                              ? "Checking common availability for:"
+                              : "Checking availability for:"}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {availabilityParticipants.map((participant) => (
+                            <Badge key={participant.id} variant="outline">
+                              {participant.name}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {isLoadingSlots ? (
+                      <div className="flex items-center justify-center gap-2 rounded-[0.9rem] border border-dashed border-surface px-4 py-8 text-body-sm text-content-muted">
+                        <LoaderCircle className="size-4 animate-spin" />
+                        Checking availability...
+                      </div>
+                    ) : slotsError ? (
+                      <p className="rounded-[0.9rem] border border-destructive/20 bg-destructive/10 px-4 py-6 text-center text-body-sm text-destructive">
+                        Unable to load adviser availability right now. Please
+                        try again.
+                      </p>
+                    ) : availableSlots.length > 0 ? (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {availableSlots.map((slot) => {
+                          const isSelected =
+                            selectedSlotStart === slot.slot_start &&
+                            selectedSlotEnd === slot.slot_end;
+                          const matchesSuggestedWindow = suggestedSlotKeys.has(
+                            `${slot.slot_start}|${slot.slot_end}`,
+                          );
+
+                          return (
+                            <button
+                              key={slot.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedSlotKey(
+                                  `${slot.slot_start}|${slot.slot_end}`,
+                                );
+                                setFieldErrors((current) => ({
+                                  ...current,
+                                  selectedTimeSlot: undefined,
+                                }));
+                                setSubmitError(null);
+                              }}
+                              className={cn(
+                                "rounded-[1rem] border px-4 py-3 text-left transition-colors",
+                                isSelected
+                                  ? "border-primary bg-primary-tint/35 shadow-[0_0_0_1px_color-mix(in_srgb,var(--primary)_40%,transparent)]"
+                                  : "border-surface bg-emerald-50 text-emerald-900 hover:border-emerald-300 hover:bg-emerald-100",
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div
+                                    className={cn(
+                                      "text-[1rem] font-medium",
+                                      isSelected
+                                        ? "text-brand-strong"
+                                        : "text-content-strong",
+                                    )}
+                                  >
+                                    {formatAvailabilityTimeRange(
+                                      slot.slot_start,
+                                      slot.slot_end,
+                                    )}
+                                  </div>
+                                  <div className="mt-2 flex flex-wrap items-center gap-2 text-body-sm text-content-muted">
+                                    <span>
+                                      {isSelected ? "Selected" : "Available"}
+                                    </span>
+                                    {matchesSuggestedWindow ? (
+                                      <Badge variant="outline">
+                                        Matches dragged window
+                                      </Badge>
+                                    ) : null}
+                                  </div>
+                                </div>
+                                {isSelected ? (
+                                  <CircleCheckBig className="size-5 text-brand" />
+                                ) : (
+                                  <CheckCircle2 className="size-5 text-success" />
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="rounded-[0.9rem] border border-dashed border-surface px-4 py-6 text-center text-body-sm text-content-muted">
+                        {isDefenseWithPanelists
+                          ? "No shared slots for all selected advisers on this date. Try another time period or adjust your panelists."
+                          : "No available slots on this date for the selected adviser. Try another time period or use the full form to choose a different date."}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="rounded-[0.9rem] border border-dashed border-surface px-4 py-6 text-center text-body-sm text-content-muted">
+                    Choose an adviser to load the same slot availability shown
+                    on the full consultation page.
+                  </p>
+                )}
+              </div>
+              <InlineFieldError message={fieldErrors.selectedTimeSlot} />
+            </ModalField>
+
+            <ModalField label="Topic / Title">
+              <Input
+                value={topic}
+                onChange={(event) => {
+                  setTopic(event.target.value);
+                  setFieldErrors((current) => ({
+                    ...current,
+                    topic: undefined,
+                  }));
+                  setSubmitError(null);
+                }}
+                placeholder="e.g., Chapter 1 Review, Methodology Discussion"
+                className="h-11 rounded-[0.95rem]"
+              />
+              <InlineFieldError message={fieldErrors.topic} />
+            </ModalField>
+
+            <ModalField label="Description / Agenda">
+              <Textarea
+                value={description}
+                onChange={(event) =>
+                  setDescription(event.target.value.slice(0, 350))
+                }
+                placeholder="Provide details about what you'd like to discuss during this consultation..."
+                className="min-h-[7.5rem] rounded-[0.95rem]"
+              />
+            </ModalField>
+
+            {submitError ? (
+              <div className="rounded-[1rem] border border-destructive/25 bg-destructive/10 px-4 py-3 text-body-sm text-destructive">
+                {submitError}
+              </div>
+            ) : null}
+
+            {selectedAdviser ? (
+              <div className="rounded-[1rem] border border-surface bg-surface-muted-soft px-4 py-3 text-body-sm text-content-muted">
+                Request will be sent to{" "}
+                <span className="font-medium text-content-strong">
+                  {selectedAdviser.name}
+                </span>
+                {" · "}
+                {selectedAdviser.departmentCode}
+              </div>
+            ) : null}
+
+            <div className="flex flex-col gap-3 pt-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 flex-1 rounded-[0.95rem]"
+                onClick={onClose}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="h-11 flex-1 rounded-[0.95rem]"
+                disabled={!canSubmit || createScheduleMutation.isPending}
+                onClick={handleSubmit}
+              >
+                {createScheduleMutation.isPending
+                  ? "Submitting..."
+                  : "Create Request"}
+              </Button>
+            </div>
+
+            <div className="text-center text-body-sm text-content-muted">
+              Need the full workflow?{" "}
+              <Link
+                href="/student/consultations/request"
+                className="font-medium text-brand underline-offset-4 hover:text-brand-strong hover:underline"
+              >
+                Open the full request form
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -2293,10 +2987,6 @@ function InlineFieldError({ message }: { message?: string }) {
 
 function toDateInputValue(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function toTimeInputValue(date: Date) {
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 function MonthDetailsRail({

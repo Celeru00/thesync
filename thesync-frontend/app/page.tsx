@@ -3,13 +3,13 @@ import Link from "next/link";
 import { CalendarDays } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { getAllowedGoogleEmailSuffix } from "@/lib/auth/google-domain";
 import { getPublicServerAuthState } from "@/lib/auth/server";
 import { getDashboardPathForRole } from "@/lib/auth/profile";
 
+const ALLOWED_GOOGLE_EMAIL_SUFFIX = "@up.edu.ph";
+
 export default async function HomePage() {
   const { appUser, authUser } = await getPublicServerAuthState();
-  const allowedGoogleEmailSuffix = getAllowedGoogleEmailSuffix();
 
   if (appUser) {
     redirect(getDashboardPathForRole(appUser.app_role));
@@ -78,9 +78,7 @@ export default async function HomePage() {
               </Button>
 
               <p className="mt-3 text-[0.95rem] leading-6 text-content-muted">
-                {allowedGoogleEmailSuffix
-                  ? `Use your Google account ending in ${allowedGoogleEmailSuffix}`
-                  : "Use the Google account you want to sign in with"}
+                Use your Google account ending in {ALLOWED_GOOGLE_EMAIL_SUFFIX}
               </p>
             </div>
           </div>

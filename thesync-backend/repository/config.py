@@ -22,7 +22,6 @@ class Settings(BaseSettings):
     google_oauth_client_id: str | None = None
     google_oauth_client_secret: str | None = None
     google_oauth_token_uri: str = "https://oauth2.googleapis.com/token"
-    allowed_google_email_domain: str | None = None
     google_calendar_scope: str = "https://www.googleapis.com/auth/calendar"
     sendgrid_api_key: str | None = None
     sendgrid_from_email: str | None = None

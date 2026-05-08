@@ -18,10 +18,6 @@ import {
   getDashboardPathForRole,
   type SignupRole,
 } from "@/lib/auth/profile";
-import {
-  getAllowedGoogleEmailSuffix,
-  isAllowedGoogleEmail,
-} from "@/lib/auth/google-domain";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -88,9 +84,14 @@ const degreeProgramOptions = [
   "BS Biology",
   "BS Food Technology",
 ] as const;
+const ALLOWED_GOOGLE_EMAIL_SUFFIX = "@up.edu.ph";
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+function isAllowedGoogleEmail(email: string) {
+  return email.trim().toLowerCase().endsWith(ALLOWED_GOOGLE_EMAIL_SUFFIX);
 }
 
 export function RegisterFlow({
@@ -125,7 +126,6 @@ export function RegisterFlow({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [role, setRole] = useState<SignupRole | null>(initialRole);
-  const allowedGoogleEmailSuffix = getAllowedGoogleEmailSuffix();
   const [profile, setProfile] = useState({
     firstName: initialPrefill.firstName,
     lastName: initialPrefill.lastName,
@@ -153,9 +153,7 @@ export function RegisterFlow({
 
     if (!isAllowedGoogleEmail(email)) {
       setEmailError(
-        allowedGoogleEmailSuffix
-          ? `Use your Google account ending in ${allowedGoogleEmailSuffix}`
-          : "Use an allowed Google account",
+        `Use your Google account ending in ${ALLOWED_GOOGLE_EMAIL_SUFFIX}`,
       );
       return;
     }
@@ -273,7 +271,6 @@ export function RegisterFlow({
               <EmailStep
                 email={email}
                 emailError={emailError}
-                allowedGoogleEmailSuffix={allowedGoogleEmailSuffix}
                 onEmailChange={(value) => {
                   setEmail(value);
                   if (emailError) {
@@ -324,14 +321,12 @@ export function RegisterFlow({
 function EmailStep({
   email,
   emailError,
-  allowedGoogleEmailSuffix,
   onEmailChange,
   onContinue,
   canContinue,
 }: {
   email: string;
   emailError: string | null;
-  allowedGoogleEmailSuffix: string | null;
   onEmailChange: (value: string) => void;
   onContinue: () => void;
   canContinue: boolean;
@@ -375,19 +370,10 @@ function EmailStep({
 
         <div className="rounded-[0.95rem] border border-card-info bg-card-info px-4 py-4 text-left">
           <p className="text-body text-card-info">
-            <span className="font-semibold">Email reminder:</span>{" "}
-            {allowedGoogleEmailSuffix ? (
-              <>
-                Use your email ending in{" "}
-                <span className="font-semibold">
-                  {allowedGoogleEmailSuffix}
-                </span>
-                , since it will be tied to your TheSync account and
-                notifications.
-              </>
-            ) : (
-              "Use the email you want tied to your TheSync account and notifications."
-            )}
+            <span className="font-semibold">Email reminder:</span> Use your
+            email ending in{" "}
+            <span className="font-semibold">{ALLOWED_GOOGLE_EMAIL_SUFFIX}</span>
+            , since it will be tied to your TheSync account and notifications.
           </p>
         </div>
       </div>
