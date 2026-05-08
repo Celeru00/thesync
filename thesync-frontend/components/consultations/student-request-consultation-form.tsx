@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useDeferredValue, useState } from "react";
 import {
   ArrowLeft,
   CalendarDays,
@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { SearchInput } from "@/components/data-display/search-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -88,10 +89,34 @@ function isDefined<T>(value: T | null | undefined): value is T {
   return value != null;
 }
 
+function matchesAdviserSearch(
+  adviser: {
+    name: string;
+    department: string;
+    departmentCode: string;
+    email: string;
+  },
+  searchTerm: string,
+) {
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  if (!normalizedSearch) {
+    return true;
+  }
+
+  return [
+    adviser.name,
+    adviser.department,
+    adviser.departmentCode,
+    adviser.email,
+  ].some((value) => value.toLowerCase().includes(normalizedSearch));
+}
+
 export function StudentRequestConsultationForm() {
   const [scheduleType, setScheduleType] = useState<ConsultationRequestType>();
   const [selectedAdviserId, setSelectedAdviserId] = useState("");
   const [selectedPanelistIds, setSelectedPanelistIds] = useState<string[]>([]);
+  const [adviserSearchTerm, setAdviserSearchTerm] = useState("");
+  const [panelistSearchTerm, setPanelistSearchTerm] = useState("");
   const [preferredDate, setPreferredDate] = useState("");
   const [timePeriod, setTimePeriod] = useState<TimePeriod>("all-day");
   const [rangeStart, setRangeStart] = useState<string | null>(null);
@@ -108,11 +133,31 @@ export function StudentRequestConsultationForm() {
     error: advisersError,
     isLoading: isLoadingAdvisers,
   } = useAdvisers();
+  const deferredAdviserSearchTerm = useDeferredValue(adviserSearchTerm);
+  const deferredPanelistSearchTerm = useDeferredValue(panelistSearchTerm);
   const selectedAdviser =
     liveAdvisers.find((adviser) => adviser.id === selectedAdviserId) ?? null;
   const selectedPanelists = liveAdvisers.filter((adviser) =>
     selectedPanelistIds.includes(adviser.id),
   );
+  const filteredAdvisers = liveAdvisers.filter((adviser) =>
+    matchesAdviserSearch(adviser, deferredAdviserSearchTerm),
+  );
+  const filteredPanelists = liveAdvisers
+    .filter((adviser) => adviser.id !== selectedAdviserId)
+    .filter((adviser) =>
+      matchesAdviserSearch(adviser, deferredPanelistSearchTerm),
+    )
+    .sort((left, right) => {
+      const leftSelected = selectedPanelistIds.includes(left.id) ? 1 : 0;
+      const rightSelected = selectedPanelistIds.includes(right.id) ? 1 : 0;
+
+      if (leftSelected !== rightSelected) {
+        return rightSelected - leftSelected;
+      }
+
+      return left.name.localeCompare(right.name);
+    });
   const availabilityParticipantIds = (
     scheduleType === "defense"
       ? [selectedAdviserId, ...selectedPanelistIds]
@@ -168,6 +213,7 @@ export function StudentRequestConsultationForm() {
 
     if (value !== "defense") {
       setSelectedPanelistIds([]);
+      setPanelistSearchTerm("");
     }
   }
 
@@ -328,29 +374,82 @@ export function StudentRequestConsultationForm() {
             </FormField>
 
             <FormField icon={UserRound} label="Select Adviser">
-              <Select
-                value={selectedAdviserId || undefined}
-                onValueChange={handleAdviserChange}
-              >
-                <SelectTrigger className="h-12 rounded-[1rem]">
-                  <SelectValue
-                    placeholder={
-                      isLoadingAdvisers
-                        ? "Loading advisers..."
-                        : liveAdvisers.length > 0
-                          ? "Choose your adviser"
-                          : "No live advisers available"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {liveAdvisers.map((adviser) => (
-                    <SelectItem key={adviser.id} value={adviser.id}>
-                      {adviser.name} ({adviser.departmentCode})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="space-y-3 rounded-[1rem] border border-surface bg-surface-card p-4 shadow-soft">
+                <SearchInput
+                  value={adviserSearchTerm}
+                  onChange={(event) => setAdviserSearchTerm(event.target.value)}
+                  placeholder="Search advisers by name, department, or email"
+                  className="h-11 rounded-[0.9rem]"
+                />
+
+                {selectedAdviser ? (
+                  <div className="rounded-[1rem] border border-brand-subtle bg-primary-tint/15 px-4 py-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-body font-medium text-brand-strong">
+                          {selectedAdviser.name}
+                        </div>
+                        <div className="mt-1 text-body-sm text-content-muted">
+                          {selectedAdviser.department}
+                        </div>
+                      </div>
+                      <Badge className="shrink-0">Selected adviser</Badge>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+                  {isLoadingAdvisers ? (
+                    <p className="rounded-[0.9rem] border border-dashed border-surface px-4 py-6 text-center text-body-sm text-content-muted">
+                      Loading advisers...
+                    </p>
+                  ) : filteredAdvisers.length > 0 ? (
+                    filteredAdvisers.map((adviser) => {
+                      const isSelected = adviser.id === selectedAdviserId;
+
+                      return (
+                        <button
+                          key={adviser.id}
+                          type="button"
+                          onClick={() => handleAdviserChange(adviser.id)}
+                          className={cn(
+                            "w-full rounded-[1rem] border px-4 py-3 text-left transition-colors",
+                            isSelected
+                              ? "border-brand bg-primary-tint/20 shadow-[0_0_0_1px_color-mix(in_srgb,var(--primary)_35%,transparent)]"
+                              : "border-surface bg-white hover:border-brand-subtle hover:bg-surface-muted-soft",
+                          )}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-body font-medium text-content-strong">
+                                {adviser.name}
+                              </div>
+                              <div className="mt-1 text-body-sm text-content-muted">
+                                {adviser.department}
+                              </div>
+                            </div>
+                            <Badge
+                              variant={isSelected ? "default" : "outline"}
+                              className="shrink-0"
+                            >
+                              {isSelected ? "Selected" : adviser.departmentCode}
+                            </Badge>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2 text-body-sm text-content-muted">
+                            <span>{adviser.email}</span>
+                            <span>•</span>
+                            <span>{adviser.availability} availability</span>
+                          </div>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <p className="rounded-[0.9rem] border border-dashed border-surface px-4 py-6 text-center text-body-sm text-content-muted">
+                      No advisers match your search.
+                    </p>
+                  )}
+                </div>
+              </div>
               {advisersError ? (
                 <FieldErrorMessage message="Unable to load advisers right now." />
               ) : null}
@@ -363,44 +462,110 @@ export function StudentRequestConsultationForm() {
             {scheduleType === "defense" ? (
               <FormField icon={UsersRound} label="Select Panelists (Optional)">
                 <div className="rounded-[1rem] border border-surface bg-surface-card px-4 py-4 shadow-soft">
-                  <div className="space-y-3">
-                    {liveAdvisers
-                      .filter((adviser) => adviser.id !== selectedAdviserId)
-                      .map((panelist) => {
-                        const checked = selectedPanelistIds.includes(
-                          panelist.id,
-                        );
+                  <div className="space-y-4">
+                    <SearchInput
+                      value={panelistSearchTerm}
+                      onChange={(event) =>
+                        setPanelistSearchTerm(event.target.value)
+                      }
+                      placeholder="Search panelists by name, department, or email"
+                      className="h-11 rounded-[0.9rem]"
+                    />
 
-                        return (
-                          <label
+                    {selectedPanelists.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {selectedPanelists.map((panelist) => (
+                          <button
                             key={panelist.id}
-                            className="flex cursor-pointer items-start gap-3 rounded-[0.85rem] px-1 py-1.5 transition-colors hover:bg-surface-muted-soft"
+                            type="button"
+                            onClick={() =>
+                              handlePanelistToggle(panelist.id, false)
+                            }
+                            className="inline-flex items-center gap-2 rounded-full bg-primary-tint/20 px-3 py-1.5 text-body-sm font-medium text-brand-strong transition-colors hover:bg-primary-tint/30"
                           >
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={(value) =>
-                                handlePanelistToggle(
-                                  panelist.id,
-                                  Boolean(value),
-                                )
-                              }
-                              className="mt-1"
-                            />
-                            <div className="min-w-0">
-                              <div className="text-body font-medium text-content-strong">
-                                {panelist.name}
+                            <span>{panelist.name}</span>
+                            <span aria-hidden="true">×</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-body-sm text-content-muted">
+                        Select one or more panelists. The defense time options
+                        below will only show shared availability across everyone
+                        you choose.
+                      </p>
+                    )}
+
+                    <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
+                      {filteredPanelists.length > 0 ? (
+                        filteredPanelists.map((panelist) => {
+                          const checked = selectedPanelistIds.includes(
+                            panelist.id,
+                          );
+
+                          return (
+                            <label
+                              key={panelist.id}
+                              className={cn(
+                                "flex cursor-pointer items-start gap-3 rounded-[1rem] border px-4 py-3 transition-colors",
+                                checked
+                                  ? "border-brand bg-primary-tint/15"
+                                  : "border-surface bg-white hover:border-brand-subtle hover:bg-surface-muted-soft",
+                              )}
+                            >
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(value) =>
+                                  handlePanelistToggle(
+                                    panelist.id,
+                                    Boolean(value),
+                                  )
+                                }
+                                className="mt-1"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="text-body font-medium text-content-strong">
+                                      {panelist.name}
+                                    </div>
+                                    <div className="mt-1 text-body-sm text-content-muted">
+                                      {panelist.department}
+                                    </div>
+                                  </div>
+                                  <Badge
+                                    variant={checked ? "default" : "outline"}
+                                    className="shrink-0"
+                                  >
+                                    {checked
+                                      ? "Selected"
+                                      : panelist.departmentCode}
+                                  </Badge>
+                                </div>
+                                <div className="mt-3 flex flex-wrap gap-2 text-body-sm text-content-muted">
+                                  <span>{panelist.email}</span>
+                                  <span>•</span>
+                                  <span>
+                                    {panelist.availability} availability
+                                  </span>
+                                </div>
                               </div>
-                              <div className="text-body-sm text-content-muted">
-                                {panelist.departmentCode}
-                              </div>
-                            </div>
-                          </label>
-                        );
-                      })}
+                            </label>
+                          );
+                        })
+                      ) : (
+                        <p className="rounded-[0.9rem] border border-dashed border-surface px-4 py-6 text-center text-body-sm text-content-muted">
+                          No panelists match your search.
+                        </p>
+                      )}
+                    </div>
                   </div>
                   <p className="mt-4 text-body-sm text-content-muted">
                     {selectedPanelistIds.length} panelist
                     {selectedPanelistIds.length === 1 ? "" : "s"} selected
+                    {panelistSearchTerm.trim()
+                      ? ` • ${filteredPanelists.length} match search`
+                      : ""}
                   </p>
                 </div>
               </FormField>

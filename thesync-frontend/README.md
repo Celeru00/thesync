@@ -75,13 +75,12 @@ The app will be live at **http://localhost:3000**.
 
 Next.js loads `.env.local` automatically in development. Variables prefixed with `NEXT_PUBLIC_` are exposed to the browser — **never put secrets in these**.
 
-| Variable                                  | Description                                 | Example                   |
-| ----------------------------------------- | ------------------------------------------- | ------------------------- |
-| `NEXT_PUBLIC_API_BASE_URL`                | Base URL of the FastAPI backend             | `http://localhost:8000`   |
-| `NEXT_PUBLIC_SUPABASE_URL`                | Supabase project URL                        | `https://xxx.supabase.co` |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`    | Supabase publishable key (safe for browser) | `sb_publishable_...`      |
-| `NEXT_PUBLIC_APP_URL`                     | This app's own URL (for OAuth callbacks)    | `http://localhost:3000`   |
-| `NEXT_PUBLIC_ALLOWED_GOOGLE_EMAIL_DOMAIN` | Optional Google email domain restriction    | `up.edu.ph`               |
+| Variable                               | Description                                 | Example                   |
+| -------------------------------------- | ------------------------------------------- | ------------------------- |
+| `NEXT_PUBLIC_API_BASE_URL`             | Base URL of the FastAPI backend             | `http://localhost:8000`   |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Supabase project URL                        | `https://xxx.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable key (safe for browser) | `sb_publishable_...`      |
+| `NEXT_PUBLIC_APP_URL`                  | This app's own URL (for OAuth callbacks)    | `http://localhost:3000`   |
 
 > **Never commit `.env.local`** — it's in `.gitignore`.
 

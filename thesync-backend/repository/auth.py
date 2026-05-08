@@ -184,55 +184,17 @@ def _normalize_optional_email(value: str | None) -> str | None:
     return normalized.lower() if normalized else None
 
 
-def _normalize_email_domain(value: str | None) -> str | None:
-    normalized = _normalize_optional_text(value)
-
-    if normalized is None:
-        return None
-
-    return normalized.lower().removeprefix("@") or None
-
-
-def _get_allowed_email_domain() -> str | None:
-    settings = get_settings()
-    configured_domain = _normalize_email_domain(settings.allowed_google_email_domain)
-
-    if configured_domain:
-        return configured_domain
-
-    if settings.app_env.strip().lower() == "development":
-        return None
-
-    return DEFAULT_ALLOWED_EMAIL_DOMAIN
-
-
-def _get_allowed_email_suffix() -> str | None:
-    allowed_domain = _get_allowed_email_domain()
-    return f"@{allowed_domain}" if allowed_domain else None
-
-
-def _get_domain_restriction_error_message() -> str:
-    allowed_suffix = _get_allowed_email_suffix()
-
-    if allowed_suffix:
-        return f"Only Google accounts ending in {allowed_suffix} are allowed."
-
-    return "Only Google accounts from the allowed domain are allowed."
-
-
 def _has_allowed_email_domain(email: str | None) -> bool:
-    allowed_suffix = _get_allowed_email_suffix()
-
-    if allowed_suffix is None:
-        return True
-
+    allowed_suffix = f"@{DEFAULT_ALLOWED_EMAIL_DOMAIN}"
     normalized_email = _normalize_optional_email(email)
     return bool(normalized_email and normalized_email.endswith(allowed_suffix))
 
 
 def _assert_allowed_email_domain(email: str | None) -> None:
     if not _has_allowed_email_domain(email):
-        raise DomainRestrictedAuthenticationError(_get_domain_restriction_error_message())
+        raise DomainRestrictedAuthenticationError(
+            f"Only Google accounts ending in @{DEFAULT_ALLOWED_EMAIL_DOMAIN} are allowed."
+        )
 
 
 def _get_metadata_value(claims: SupabaseClaims, *keys: str) -> str | None:

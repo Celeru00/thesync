@@ -85,7 +85,6 @@ Copy `.env.example` to `.env` and fill in:
 | `GOOGLE_REDIRECT_URI` | OAuth callback URL | e.g. `http://localhost:8000/auth/callback` |
 | `SENDGRID_API_KEY` | SendGrid API key | SendGrid dashboard |
 | `SENDGRID_FROM_EMAIL` | Verified sender email | Configured in SendGrid |
-| `ALLOWED_GOOGLE_EMAIL_DOMAIN` | Optional Google email domain restriction | e.g. `up.edu.ph` |
 | `FRONTEND_URL` | Allowed CORS origin | e.g. `http://localhost:3000` |
 
 > **Never commit `.env`** — it's in `.gitignore`. If you accidentally commit secrets, rotate them immediately.
