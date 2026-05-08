@@ -653,6 +653,7 @@ export function PortalCalendarView({
   const overlaySourcesQuery = useCalendarOverlaySources(overlayEnabled);
   const overlayEventsQuery = useCalendarOverlayEvents(
     selectedOverlayCalendars.map((calendar) => calendar.userId),
+    undefined,
     overlayEnabled,
   );
   const overlayPortalEvents = useMemo(
