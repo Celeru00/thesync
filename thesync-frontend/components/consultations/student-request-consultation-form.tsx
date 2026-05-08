@@ -122,9 +122,24 @@ function formatTimeRange(start: string, end: string): string {
 }
 
 const ALL_SLOT_HOURS: Array<[number, number]> = [
-  [8, 0], [8, 30], [9, 0], [9, 30], [10, 0], [10, 30],
-  [11, 0], [11, 30], [12, 0], [12, 30], [13, 0], [13, 30],
-  [14, 0], [14, 30], [15, 0], [15, 30], [16, 0], [16, 30],
+  [8, 0],
+  [8, 30],
+  [9, 0],
+  [9, 30],
+  [10, 0],
+  [10, 30],
+  [11, 0],
+  [11, 30],
+  [12, 0],
+  [12, 30],
+  [13, 0],
+  [13, 30],
+  [14, 0],
+  [14, 30],
+  [15, 0],
+  [15, 30],
+  [16, 0],
+  [16, 30],
 ];
 
 type StandardSlotStatus =
@@ -265,8 +280,8 @@ export function StudentRequestConsultationForm() {
     rangeStart && rangeEnd
       ? formatTimeRange(rangeStart, rangeEnd)
       : rangeStart
-      ? `${slotTimeFormatter.format(new Date(rangeStart))} – select end time`
-      : "";
+        ? `${slotTimeFormatter.format(new Date(rangeStart))} – select end time`
+        : "";
   const descriptionRemaining = 500 - agenda.length;
 
   function handleScheduleTypeChange(value: ConsultationRequestType) {
@@ -673,10 +688,10 @@ export function StudentRequestConsultationForm() {
                                     isHighlighted
                                       ? "text-brand-strong"
                                       : isAvailable
-                                      ? "text-content-strong"
-                                      : isBlocked
-                                      ? "text-destructive-foreground"
-                                      : "text-content-muted",
+                                        ? "text-content-strong"
+                                        : isBlocked
+                                          ? "text-destructive-foreground"
+                                          : "text-content-muted",
                                   )}
                                 >
                                   {formatTimeRange(option.start, option.end)}
