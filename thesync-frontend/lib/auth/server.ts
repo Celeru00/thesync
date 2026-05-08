@@ -57,6 +57,14 @@ const resolveSupabaseAuthState = cache(
         };
       }
 
+      if (process.env.NODE_ENV === "development") {
+        console.warn("Unable to resolve Supabase auth state in development:", error);
+        return {
+          authUser: null,
+          session: null,
+        };
+      }
+
       throw error;
     }
 

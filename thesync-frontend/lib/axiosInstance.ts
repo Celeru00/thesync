@@ -23,23 +23,34 @@ async function attachAuthorizationHeader(
     return config;
   }
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-  if (!session?.access_token) {
-    return config;
-  }
+    if (!session?.access_token) {
+      return config;
+    }
 
-  if (config.headers instanceof AxiosHeaders) {
+    if (config.headers instanceof AxiosHeaders) {
+      config.headers.set("Authorization", `Bearer ${session.access_token}`);
+      return config;
+    }
+
+    config.headers = new AxiosHeaders(config.headers);
     config.headers.set("Authorization", `Bearer ${session.access_token}`);
+
     return config;
+  } catch (error) {
+    if (process.env.NODE_ENV === "development") {
+      // Supabase may be unreachable in local development; proceed without auth.
+      // Requests may still fail if the backend requires a valid session.
+      console.warn("Unable to attach Supabase auth header:", error);
+      return config;
+    }
+
+    throw error;
   }
-
-  config.headers = new AxiosHeaders(config.headers);
-  config.headers.set("Authorization", `Bearer ${session.access_token}`);
-
-  return config;
 }
 
 export const axiosInstance = axios.create({

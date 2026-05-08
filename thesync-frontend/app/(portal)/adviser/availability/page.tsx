@@ -454,7 +454,12 @@ export default function AdviserAvailabilityPage() {
                             <Plus className="mx-auto mb-2 size-4" />
                             Add slot
                           </div>
-                        ) : null}
+                        ) : (
+                          <div className="flex items-center gap-1 pt-1 text-xs text-content-muted">
+                            <Plus className="size-3" />
+                            <span>Add slot</span>
+                          </div>
+                        )}
                       </div>
                     </button>
                   ))}

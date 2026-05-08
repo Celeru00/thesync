@@ -13,7 +13,6 @@ import {
   LoaderCircle,
   UserRound,
   UsersRound,
-  XCircle,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -32,24 +31,22 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { useAdvisers } from "@/hooks/useAdvisers";
+import { useFreeSlots } from "@/hooks/useAvailability";
+import { useCalendarOverlayEvents } from "@/hooks/useCalendarOverlay";
 import { useCreateSchedule } from "@/hooks/useSchedules";
+import type { AvailabilitySlot } from "@/lib/api";
 import {
-  buildScheduledAtIso,
   parseConsultationRequestError,
   scheduleTypeIdByValue,
   type ConsultationRequestFieldName,
 } from "@/lib/consultation-request";
 import {
   requestNotes,
-  requestTimeSlots,
   type AdviserAvailability,
-  type AdviserProfile,
   type ConsultationRequestType,
   type TimePeriod,
 } from "@/lib/mock/student-consultations";
 import { cn } from "@/lib/utils";
-
-type SlotStatus = "available" | "busy";
 
 const scheduleTypeOptions: Array<{
   value: ConsultationRequestType;
@@ -71,13 +68,130 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
 });
 
+function getDateRangeIsoStrings(dateValue: string) {
+  const start = new Date(`${dateValue}T00:00:00`);
+  const end = new Date(start);
+  end.setHours(23, 59, 59, 999);
+
+  return { timeMin: start.toISOString(), timeMax: end.toISOString() };
+}
+
+function isTimePeriodMatch(dateTime: string, period: TimePeriod) {
+  if (period === "all-day") {
+    return true;
+  }
+
+  const hour = new Date(dateTime).getHours();
+  return period === "morning" ? hour < 12 : hour >= 12;
+}
+
+function isSameDate(dateTime: string, dateKey: string) {
+  const date = new Date(dateTime);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}` === dateKey;
+}
+
+function isDateTimeRangeOverlap(
+  startA: string,
+  endA: string,
+  startB: string | null,
+  endB: string | null,
+) {
+  if (!startB || !endB) {
+    return false;
+  }
+
+  const aStart = new Date(startA).getTime();
+  const aEnd = new Date(endA).getTime();
+  const bStart = new Date(startB).getTime();
+  const bEnd = new Date(endB).getTime();
+
+  return aStart < bEnd && aEnd > bStart;
+}
+
+const slotTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+function formatTimeRange(start: string, end: string): string {
+  return `${slotTimeFormatter.format(new Date(start))} – ${slotTimeFormatter.format(new Date(end))}`;
+}
+
+const ALL_SLOT_HOURS: Array<[number, number]> = [
+  [8, 0], [8, 30], [9, 0], [9, 30], [10, 0], [10, 30],
+  [11, 0], [11, 30], [12, 0], [12, 30], [13, 0], [13, 30],
+  [14, 0], [14, 30], [15, 0], [15, 30], [16, 0], [16, 30],
+];
+
+type StandardSlotStatus =
+  | "available"
+  | "blocked-adviser"
+  | "blocked-calendar"
+  | "unavailable";
+
+function generateStandardSlots(dateValue: string) {
+  return ALL_SLOT_HOURS.map(([hour, minute]) => {
+    const start = new Date(
+      `${dateValue}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`,
+    );
+    const end = new Date(start.getTime() + 30 * 60_000);
+    return { start: start.toISOString(), end: end.toISOString() };
+  });
+}
+
+function getStandardSlotStatus(
+  slotStart: string,
+  slotEnd: string,
+  adviserSlots: AvailabilitySlot[],
+  calendarEvents: Array<{ starts_at: string | null; ends_at: string | null }>,
+): StandardSlotStatus {
+  if (
+    adviserSlots.some(
+      (s) =>
+        s.is_blocked &&
+        isDateTimeRangeOverlap(slotStart, slotEnd, s.slot_start, s.slot_end),
+    )
+  ) {
+    return "blocked-adviser";
+  }
+  if (
+    calendarEvents.some((e) =>
+      isDateTimeRangeOverlap(slotStart, slotEnd, e.starts_at, e.ends_at),
+    )
+  ) {
+    return "blocked-calendar";
+  }
+  if (
+    adviserSlots.some(
+      (s) =>
+        !s.is_blocked &&
+        isDateTimeRangeOverlap(slotStart, slotEnd, s.slot_start, s.slot_end),
+    )
+  ) {
+    return "available";
+  }
+  return "unavailable";
+}
+
+function getSlotStatusLabel(status: StandardSlotStatus): string {
+  if (status === "available") return "Available";
+  if (status === "blocked-adviser") return "Blocked";
+  if (status === "blocked-calendar") return "Busy (Calendar)";
+  return "Not available";
+}
+
 export function StudentRequestConsultationForm() {
   const [scheduleType, setScheduleType] = useState<ConsultationRequestType>();
   const [selectedAdviserId, setSelectedAdviserId] = useState("");
   const [selectedPanelistIds, setSelectedPanelistIds] = useState<string[]>([]);
   const [preferredDate, setPreferredDate] = useState("");
   const [timePeriod, setTimePeriod] = useState<TimePeriod>("all-day");
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState("");
+  const [rangeStart, setRangeStart] = useState<string | null>(null);
+  const [rangeEnd, setRangeEnd] = useState<string | null>(null);
   const [topic, setTopic] = useState("");
   const [agenda, setAgenda] = useState("");
   const [fieldErrors, setFieldErrors] = useState<
@@ -95,42 +209,70 @@ export function StudentRequestConsultationForm() {
   const selectedPanelists = liveAdvisers.filter((adviser) =>
     selectedPanelistIds.includes(adviser.id),
   );
-  const visibleSlots = requestTimeSlots.filter((slot) => {
-    if (timePeriod === "all-day") {
-      return true;
-    }
+  const { data: freeSlots = [], isLoading: isLoadingSlots } = useFreeSlots(
+    selectedAdviserId || undefined,
+    preferredDate || undefined,
+  );
 
-    return slot.period === timePeriod;
-  });
+  const {
+    data: calendarBusyEvents = [],
+    isLoading: isLoadingCalendarEvents,
+    error: calendarEventsError,
+  } = useCalendarOverlayEvents(
+    selectedAdviserId ? [selectedAdviserId] : [],
+    preferredDate ? getDateRangeIsoStrings(preferredDate) : undefined,
+    Boolean(selectedAdviserId && preferredDate),
+  );
 
-  const participants = selectedAdviser
-    ? [selectedAdviser, ...selectedPanelists]
+  const freeSlotsByDate = preferredDate
+    ? freeSlots.filter((slot) => isSameDate(slot.slot_start, preferredDate))
+    : freeSlots;
+
+  const standardSlotsForDate = preferredDate
+    ? generateStandardSlots(preferredDate)
     : [];
-  const slotsWithStatus = visibleSlots.map((slot) => ({
+
+  const slotsWithStatus = standardSlotsForDate.map((slot) => ({
     ...slot,
-    status: getSlotStatus(slot.id, participants),
+    status: getStandardSlotStatus(
+      slot.start,
+      slot.end,
+      freeSlotsByDate,
+      calendarBusyEvents,
+    ),
   }));
-  const availableSlotCount = requestTimeSlots.filter(
-    (slot) => getSlotStatus(slot.id, participants) === "available",
+
+  const visibleTimeOptions = slotsWithStatus.filter((slot) =>
+    isTimePeriodMatch(slot.start, timePeriod),
+  );
+
+  const availableSlotCount = visibleTimeOptions.filter(
+    (slot) => slot.status === "available",
   ).length;
   const canShowSlots = Boolean(selectedAdviser && preferredDate);
   const canSubmit = Boolean(
     scheduleType &&
     selectedAdviser &&
     preferredDate &&
-    selectedTimeSlot &&
+    rangeStart &&
+    rangeEnd &&
     topic.trim(),
   );
   const selectedDateObject = preferredDate
     ? parseDateInput(preferredDate)
     : null;
-  const selectedTimeLabel =
-    requestTimeSlots.find((slot) => slot.id === selectedTimeSlot)?.label ?? "";
+  const selectedRangeLabel =
+    rangeStart && rangeEnd
+      ? formatTimeRange(rangeStart, rangeEnd)
+      : rangeStart
+      ? `${slotTimeFormatter.format(new Date(rangeStart))} – select end time`
+      : "";
   const descriptionRemaining = 500 - agenda.length;
 
   function handleScheduleTypeChange(value: ConsultationRequestType) {
     setScheduleType(value);
-    setSelectedTimeSlot("");
+    setRangeStart(null);
+    setRangeEnd(null);
     setFieldErrors((current) => ({ ...current, scheduleType: undefined }));
     setSubmitError(null);
 
@@ -141,7 +283,8 @@ export function StudentRequestConsultationForm() {
 
   function handleAdviserChange(value: string) {
     setSelectedAdviserId(value);
-    setSelectedTimeSlot("");
+    setRangeStart(null);
+    setRangeEnd(null);
     setFieldErrors((current) => ({ ...current, selectedAdviserId: undefined }));
     setSubmitError(null);
     setSelectedPanelistIds((current) =>
@@ -150,7 +293,8 @@ export function StudentRequestConsultationForm() {
   }
 
   function handlePanelistToggle(panelistId: string, checked: boolean) {
-    setSelectedTimeSlot("");
+    setRangeStart(null);
+    setRangeEnd(null);
     setSelectedPanelistIds((current) => {
       if (checked) {
         return [...current, panelistId];
@@ -177,9 +321,9 @@ export function StudentRequestConsultationForm() {
       nextFieldErrors.preferredDate = "Please choose a preferred date.";
     }
 
-    if (!selectedTimeSlot) {
+    if (!rangeStart || !rangeEnd) {
       nextFieldErrors.selectedTimeSlot =
-        "Please choose an available time slot.";
+        "Please choose an available time range.";
     }
 
     if (!topic.trim()) {
@@ -196,7 +340,7 @@ export function StudentRequestConsultationForm() {
       return;
     }
 
-    const scheduledAt = buildScheduledAtIso(preferredDate, selectedTimeSlot);
+    const scheduledAt = rangeStart!;
 
     setFieldErrors({});
     setSubmitError(null);
@@ -229,7 +373,8 @@ export function StudentRequestConsultationForm() {
     setSelectedPanelistIds([]);
     setPreferredDate("");
     setTimePeriod("all-day");
-    setSelectedTimeSlot("");
+    setRangeStart(null);
+    setRangeEnd(null);
     setTopic("");
     setAgenda("");
     setFieldErrors({});
@@ -377,7 +522,8 @@ export function StudentRequestConsultationForm() {
                 value={preferredDate}
                 onChange={(event) => {
                   setPreferredDate(event.target.value);
-                  setSelectedTimeSlot("");
+                  setRangeStart(null);
+                  setRangeEnd(null);
                   setFieldErrors((current) => ({
                     ...current,
                     preferredDate: undefined,
@@ -396,11 +542,9 @@ export function StudentRequestConsultationForm() {
                   <div className="space-y-1">
                     <h3 className="text-subheading">Select Time</h3>
                     <p className="text-body text-content-muted">
-                      {availableSlotCount} of {requestTimeSlots.length} slots
-                      available on{" "}
-                      {selectedDateObject
-                        ? dateFormatter.format(selectedDateObject)
-                        : preferredDate}
+                      {isLoadingSlots
+                        ? "Checking availability..."
+                        : `${availableSlotCount} ${availableSlotCount === 1 ? "slot" : "slots"} available on ${selectedDateObject ? dateFormatter.format(selectedDateObject) : preferredDate}`}
                     </p>
                   </div>
 
@@ -412,7 +556,11 @@ export function StudentRequestConsultationForm() {
                         <button
                           key={option.value}
                           type="button"
-                          onClick={() => setTimePeriod(option.value)}
+                          onClick={() => {
+                            setTimePeriod(option.value);
+                            setRangeStart(null);
+                            setRangeEnd(null);
+                          }}
                           className={cn(
                             "rounded-full px-4 py-2 text-[0.95rem] font-medium transition-colors",
                             active
@@ -427,116 +575,177 @@ export function StudentRequestConsultationForm() {
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2 text-body text-content-muted">
-                  <div className="flex items-start gap-2">
-                    <Clock3 className="mt-1 size-4 shrink-0" />
-                    <span>Checking availability for:</span>
+                {selectedAdviser ? (
+                  <div className="flex flex-col gap-2 text-body text-content-muted">
+                    <div className="flex items-start gap-2">
+                      <Clock3 className="mt-1 size-4 shrink-0" />
+                      <span>Checking availability for:</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="outline">{selectedAdviser.name}</Badge>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {participants.map((participant) => (
-                      <Badge key={participant.id} variant="outline">
-                        {participant.name}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
+                ) : null}
 
                 <div className="rounded-[1.5rem] border border-surface bg-surface-card px-4 py-4 shadow-soft">
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    {slotsWithStatus.map((slot) => {
-                      const isSelected = selectedTimeSlot === slot.id;
-                      const isAvailable = slot.status === "available";
+                  {isLoadingSlots || isLoadingCalendarEvents ? (
+                    <p className="py-8 text-center text-body-sm text-content-muted">
+                      Checking availability...
+                    </p>
+                  ) : visibleTimeOptions.length > 0 ? (
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {visibleTimeOptions.map((option) => {
+                        const isAvailable = option.status === "available";
+                        const isBlocked =
+                          option.status === "blocked-adviser" ||
+                          option.status === "blocked-calendar";
+                        const isInRange =
+                          rangeStart !== null &&
+                          rangeEnd !== null &&
+                          option.start >= rangeStart &&
+                          option.end <= rangeEnd;
+                        const isPendingStart =
+                          rangeStart !== null &&
+                          rangeEnd === null &&
+                          option.start === rangeStart;
+                        const isHighlighted = isInRange || isPendingStart;
 
-                      return (
-                        <button
-                          key={slot.id}
-                          type="button"
-                          disabled={!isAvailable}
-                          onClick={() => {
-                            setSelectedTimeSlot(slot.id);
-                            setFieldErrors((current) => ({
-                              ...current,
-                              selectedTimeSlot: undefined,
-                            }));
-                            setSubmitError(null);
-                          }}
-                          className={cn(
-                            "rounded-[1rem] border px-4 py-3 text-left transition-colors",
-                            isAvailable
-                              ? "border-surface bg-surface-card hover:border-brand-subtle"
-                              : "border-surface bg-surface-muted-soft/50 text-content-muted/65",
-                            isSelected &&
-                              "border-primary bg-primary-tint/35 shadow-[0_0_0_1px_color-mix(in_srgb,var(--primary)_40%,transparent)]",
-                          )}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <div
-                                className={cn(
-                                  "text-[1.05rem] font-medium",
-                                  isAvailable
-                                    ? "text-content-strong"
-                                    : "text-content-muted/70",
-                                  isSelected && "text-brand-strong",
-                                )}
-                              >
-                                {slot.label}
-                              </div>
-                              <div
-                                className={cn(
-                                  "mt-2 text-body-sm",
-                                  isAvailable
-                                    ? "text-success"
-                                    : "text-destructive",
-                                )}
-                              >
-                                {isAvailable ? "Available" : "Busy"}
-                              </div>
-                            </div>
+                        return (
+                          <button
+                            key={option.start}
+                            type="button"
+                            disabled={!isAvailable}
+                            onClick={() => {
+                              if (!isAvailable) return;
 
-                            {isSelected ? (
-                              <CircleCheckBig className="size-5 text-brand" />
-                            ) : isAvailable ? (
-                              <CheckCircle2 className="size-5 text-success" />
-                            ) : (
-                              <XCircle className="size-5 text-destructive" />
+                              if (!rangeStart || rangeEnd !== null) {
+                                setRangeStart(option.start);
+                                setRangeEnd(null);
+                              } else if (option.start < rangeStart) {
+                                setRangeStart(option.start);
+                                setRangeEnd(null);
+                              } else if (option.start === rangeStart) {
+                                setRangeStart(null);
+                                setRangeEnd(null);
+                              } else {
+                                const allIntermediateAvailable =
+                                  visibleTimeOptions
+                                    .filter(
+                                      (s) =>
+                                        s.start > rangeStart &&
+                                        s.start < option.start,
+                                    )
+                                    .every((s) => s.status === "available");
+
+                                if (allIntermediateAvailable) {
+                                  setRangeEnd(option.end);
+                                } else {
+                                  setRangeStart(option.start);
+                                  setRangeEnd(null);
+                                }
+                              }
+
+                              setFieldErrors((current) => ({
+                                ...current,
+                                selectedTimeSlot: undefined,
+                              }));
+                              setSubmitError(null);
+                            }}
+                            className={cn(
+                              "rounded-[1rem] border px-4 py-3 text-left transition-colors",
+                              isAvailable &&
+                                !isHighlighted &&
+                                "border-surface bg-emerald-50 text-emerald-900 hover:border-emerald-300 hover:bg-emerald-100",
+                              isAvailable &&
+                                isHighlighted &&
+                                "border-primary bg-primary-tint/35 shadow-[0_0_0_1px_color-mix(in_srgb,var(--primary)_40%,transparent)]",
+                              isBlocked &&
+                                "border-destructive bg-destructive/10 text-destructive/90 cursor-not-allowed",
+                              option.status === "unavailable" &&
+                                "cursor-not-allowed border-surface bg-surface-muted/50 text-content-muted opacity-60",
                             )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <div
+                                  className={cn(
+                                    "text-[1.05rem] font-medium",
+                                    isHighlighted
+                                      ? "text-brand-strong"
+                                      : isAvailable
+                                      ? "text-content-strong"
+                                      : isBlocked
+                                      ? "text-destructive-foreground"
+                                      : "text-content-muted",
+                                  )}
+                                >
+                                  {formatTimeRange(option.start, option.end)}
+                                </div>
+                                <div className="mt-2 text-body-sm">
+                                  {getSlotStatusLabel(option.status)}
+                                </div>
+                              </div>
+                              {isHighlighted ? (
+                                <CircleCheckBig className="size-5 text-brand" />
+                              ) : isAvailable ? (
+                                <CheckCircle2 className="size-5 text-success" />
+                              ) : null}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="py-8 text-center text-body-sm text-content-muted">
+                      No available slots on this date. Try another date or a
+                      different adviser.
+                    </p>
+                  )}
 
-                  <Separator className="my-5" />
-                  <div className="flex flex-wrap items-center justify-center gap-6 text-body-sm text-content-muted">
-                    <LegendItem
-                      icon={<CheckCircle2 className="size-4 text-success" />}
-                      label="Available"
-                    />
-                    <LegendItem
-                      icon={<XCircle className="size-4 text-destructive" />}
-                      label="Busy"
-                    />
-                    <LegendItem
-                      icon={
-                        <span className="size-4 rounded-[0.3rem] border-2 border-brand" />
-                      }
-                      label="Selected"
-                    />
-                  </div>
+                  {visibleTimeOptions.length > 0 ? (
+                    <>
+                      <Separator className="my-5" />
+                      <div className="flex flex-wrap items-center justify-center gap-6 text-body-sm text-content-muted">
+                        <LegendItem
+                          icon={
+                            <CheckCircle2 className="size-4 text-success" />
+                          }
+                          label="Available"
+                        />
+                        <LegendItem
+                          icon={
+                            <span className="inline-flex h-4 w-4 rounded-full bg-destructive" />
+                          }
+                          label="Blocked / Busy"
+                        />
+                        <LegendItem
+                          icon={
+                            <span className="size-4 rounded-[0.3rem] border-2 border-brand" />
+                          }
+                          label="Selected"
+                        />
+                      </div>
+                    </>
+                  ) : null}
                 </div>
 
-                {selectedTimeLabel ? (
+                {selectedRangeLabel ? (
                   <div className="flex items-start gap-3 rounded-[1.15rem] border border-success bg-success-soft px-4 py-4 text-content-strong">
                     <CircleCheckBig className="mt-1 size-5 shrink-0 text-success" />
                     <div>
                       <div className="text-card-title text-success">
-                        {selectedTimeLabel}
+                        {selectedRangeLabel}
                       </div>
                       <p className="text-body text-content">
-                        is available for all participants
+                        {rangeEnd ? "selected" : "— select an end time"}
                       </p>
                     </div>
+                  </div>
+                ) : null}
+                {calendarEventsError ? (
+                  <div className="rounded-[1rem] border border-destructive/25 bg-destructive/10 px-4 py-3 text-body text-destructive">
+                    Unable to load adviser calendar busy times. Availability is
+                    shown from adviser schedule only.
                   </div>
                 ) : null}
 
@@ -637,8 +846,8 @@ export function StudentRequestConsultationForm() {
             <SummaryItem
               label="Date & Time"
               value={
-                selectedDateObject && selectedTimeLabel
-                  ? `${dateFormatter.format(selectedDateObject)} at ${selectedTimeLabel}`
+                selectedDateObject && rangeStart && rangeEnd
+                  ? `${dateFormatter.format(selectedDateObject)}, ${selectedRangeLabel}`
                   : "Not selected"
               }
             />
@@ -762,21 +971,6 @@ function LegendItem({ icon, label }: { icon: React.ReactNode; label: string }) {
       <span>{label}</span>
     </div>
   );
-}
-
-function getSlotStatus(
-  slotId: string,
-  participants: AdviserProfile[],
-): SlotStatus {
-  if (participants.length === 0) {
-    return "busy";
-  }
-
-  const available = participants.every((participant) =>
-    participant.availableSlots.includes(slotId),
-  );
-
-  return available ? "available" : "busy";
 }
 
 function parseDateInput(value: string) {

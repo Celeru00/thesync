@@ -10,13 +10,22 @@ export function AuthSessionRecovery() {
     const supabase = createClient();
 
     async function recoverInvalidSession() {
-      const { error } = await supabase.auth.getSession();
+      try {
+        const { error } = await supabase.auth.getSession();
 
-      if (!isRefreshTokenNotFoundError(error)) {
-        return;
+        if (!isRefreshTokenNotFoundError(error)) {
+          return;
+        }
+
+        await supabase.auth.signOut({ scope: "local" });
+      } catch (error) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("Supabase session recovery failed:", error);
+          return;
+        }
+
+        throw error;
       }
-
-      await supabase.auth.signOut({ scope: "local" });
     }
 
     void recoverInvalidSession();

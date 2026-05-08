@@ -13,21 +13,38 @@ import { createClient } from "@/lib/supabase/client";
 const supabase = createClient();
 
 async function getAccessToken() {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-  if (!session?.access_token) {
-    throw new Error("Authentication required.");
+    if (!session?.access_token) {
+      throw new Error("Authentication required.");
+    }
+
+    return session.access_token;
+  } catch (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn("Unable to retrieve Supabase access token:", error);
+      throw new Error("Authentication unavailable.");
+    }
+
+    throw error;
   }
-
-  return session.access_token;
 }
 
 export const calendarOverlayQueryKeys = {
   sources: ["calendar-overlay-sources"] as const,
-  events: (userIds: string[]) =>
-    ["calendar-overlay-events", [...userIds].sort()] as const,
+  events: (
+    userIds: string[],
+    params?: { timeMin?: string; timeMax?: string },
+  ) =>
+    [
+      "calendar-overlay-events",
+      [...userIds].sort(),
+      params?.timeMin ?? null,
+      params?.timeMax ?? null,
+    ] as const,
 };
 
 export function useCalendarOverlaySources(
@@ -43,16 +60,18 @@ export function useCalendarOverlaySources(
 
 export function useCalendarOverlayEvents(
   userIds: string[],
+  params?: { timeMin?: string; timeMax?: string },
   enabled = true,
 ): UseQueryResult<GoogleCalendarOverlayEvent[], Error> {
   const normalizedUserIds = [...userIds].sort();
 
   return useQuery({
-    queryKey: calendarOverlayQueryKeys.events(normalizedUserIds),
+    queryKey: calendarOverlayQueryKeys.events(normalizedUserIds, params),
     queryFn: async () =>
       fetchGoogleCalendarOverlayEvents(
         await getAccessToken(),
         normalizedUserIds,
+        params,
       ),
     enabled: enabled && normalizedUserIds.length > 0,
   });

@@ -42,9 +42,19 @@ export async function proxy(request: NextRequest) {
       throw error;
     }
   } catch (error) {
-    if (!isRecoverableSessionError(error)) {
-      throw error;
+    if (isRecoverableSessionError(error)) {
+      return response;
     }
+
+    if (process.env.NODE_ENV === "development") {
+      console.warn(
+        "Supabase auth fetch failed in development. Continuing without auth check.",
+        error,
+      );
+      return response;
+    }
+
+    throw error;
   }
 
   return response;
